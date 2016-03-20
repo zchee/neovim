@@ -11,6 +11,7 @@
 #include "nvim/popupmnu.h"
 #include "nvim/charset.h"
 #include "nvim/ex_cmds.h"
+#include "nvim/fileio.h"
 #include "nvim/memline.h"
 #include "nvim/misc2.h"
 #include "nvim/move.h"
@@ -258,6 +259,8 @@ redo:
     }
     pum_width = max_width - pum_scrollbar;
   }
+
+  apply_autocmds(EVENT_PUMVISIBLE, NULL, NULL, false, curbuf);
 
   pum_array = array;
   pum_size = size;

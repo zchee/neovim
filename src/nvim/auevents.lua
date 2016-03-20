@@ -56,6 +56,7 @@ return {
     'InsertEnter',            -- when entering Insert mode
     'InsertLeave',            -- when leaving Insert mode
     'JobActivity',            -- when job sent some data
+    'PumVisible',             -- when open popupmenu
     'MenuPopup',              -- just before popup menu is displayed
     'OptionSet',              -- after setting any option
     'QuickFixCmdPost',        -- after :make, :grep etc.
@@ -106,5 +107,6 @@ return {
     TabNewEntered=true,
     TermClose=true,
     TermOpen=true,
+    PumVisible=true,
   },
 }
