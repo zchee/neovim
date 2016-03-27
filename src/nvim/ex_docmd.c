@@ -7261,7 +7261,7 @@ static void ex_rundo(exarg_T *eap)
   char_u hash[UNDO_HASH_SIZE];
 
   u_compute_hash(hash);
-  u_read_undo((char *) eap->arg, hash, NULL);
+  u_read_undo((char *) eap->arg, hash, NULL, eap->forceit);
 }
 
 /*

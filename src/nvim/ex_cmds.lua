@@ -2150,7 +2150,7 @@ return {
   },
   {
     command='rundo',
-    flags=bit.bor(NEEDARG, FILE1),
+    flags=bit.bor(BANG, NEEDARG, FILE1),
     addr_type=ADDR_LINES,
     func='ex_rundo',
   },

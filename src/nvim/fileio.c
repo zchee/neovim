@@ -1952,7 +1952,7 @@ failed:
     char_u hash[UNDO_HASH_SIZE];
 
     sha256_finish(&sha_ctx, hash);
-    u_read_undo(NULL, hash, fname);
+    u_read_undo(NULL, hash, fname, FALSE);
   }
 
   if (!read_stdin && !read_buffer) {
