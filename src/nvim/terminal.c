@@ -227,8 +227,10 @@ Terminal *terminal_open(TerminalOptions opts)
   rv->invalid_end = opts.height;
   refresh_screen(rv, curbuf);
   set_option_value((uint8_t *)"buftype", 0, (uint8_t *)"terminal", OPT_LOCAL);
+  set_option_value((uint8_t *)"filetype", 0, (uint8_t *)"terminal", OPT_LOCAL);
   // some sane settings for terminal buffers
   set_option_value((uint8_t *)"wrap", false, NULL, OPT_LOCAL);
+  set_option_value((uint8_t *)"list", false, NULL, OPT_LOCAL);
   set_option_value((uint8_t *)"number", false, NULL, OPT_LOCAL);
   set_option_value((uint8_t *)"relativenumber", false, NULL, OPT_LOCAL);
   RESET_BINDING(curwin);
