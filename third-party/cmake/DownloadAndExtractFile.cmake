@@ -88,22 +88,22 @@ endif()
 
 # We could avoid computing the SHA256 entirely if a NULL_SHA256 was given,
 # but we want to warn users of an empty file.
-file(SHA256 ${file} ACTUAL_SHA256)
-if(ACTUAL_SHA256 STREQUAL "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-  # File was empty.  It's likely due to lack of SSL support.
-  message(FATAL_ERROR
-    "Failed to download ${URL}.  The file is empty and likely means CMake "
-    "was built without SSL support.  Please use a version of CMake with "
-    "proper SSL support.  See "
-    "https://github.com/neovim/neovim/wiki/Building-Neovim#build-prerequisites "
-    "for more information.")
-elseif((NOT EXPECTED_SHA256 STREQUAL NULL_SHA256) AND
-       (NOT EXPECTED_SHA256 STREQUAL ACTUAL_SHA256))
-  # Wasn't a NULL SHA256 and we didn't match, so we fail.
-  message(FATAL_ERROR
-    "Failed to download ${URL}.  Expected a SHA256 of "
-    "${EXPECTED_SHA256} but got ${ACTUAL_SHA256} instead.")
-endif()
+# file(SHA256 ${file} ACTUAL_SHA256)
+# if(ACTUAL_SHA256 STREQUAL "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+#   # File was empty.  It's likely due to lack of SSL support.
+#   message(FATAL_ERROR
+#     "Failed to download ${URL}.  The file is empty and likely means CMake "
+#     "was built without SSL support.  Please use a version of CMake with "
+#     "proper SSL support.  See "
+#     "https://github.com/neovim/neovim/wiki/Building-Neovim#build-prerequisites "
+#     "for more information.")
+# elseif((NOT EXPECTED_SHA256 STREQUAL NULL_SHA256) AND
+#        (NOT EXPECTED_SHA256 STREQUAL ACTUAL_SHA256))
+#   # Wasn't a NULL SHA256 and we didn't match, so we fail.
+#   message(FATAL_ERROR
+#     "Failed to download ${URL}.  Expected a SHA256 of "
+#     "${EXPECTED_SHA256} but got ${ACTUAL_SHA256} instead.")
+# endif()
 
 message(STATUS "downloading... done")
 
