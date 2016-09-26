@@ -39,7 +39,7 @@ endfunction()
 set(UNIX_CFGCMD sh ${DEPS_BUILD_DIR}/src/libuv/autogen.sh &&
   ${DEPS_BUILD_DIR}/src/libuv/configure --with-pic --disable-shared
   --prefix=${DEPS_INSTALL_DIR} --libdir=${DEPS_INSTALL_DIR}/lib
-  CC=${DEPS_C_COMPILER})
+  CC=${DEPS_C_COMPILER} CFLAGS=-flto)
 
 if(UNIX)
   BuildLibuv(
