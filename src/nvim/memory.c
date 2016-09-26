@@ -16,6 +16,15 @@
 #include "nvim/misc1.h"
 #include "nvim/ui.h"
 
+#ifdef HAVE_TCMALLOC
+// Force tc_ prefix on tmalloc functions.
+# include <gperftools/tcmalloc.h>
+# define malloc(size) tc_malloc(size)
+# define calloc(count, size) tc_calloc(count, size)
+# define realloc(ptr, size) tc_realloc(ptr, size)
+# define free(ptr) tc_free(ptr)
+#endif
+
 #ifdef HAVE_JEMALLOC
 // Force je_ prefix on jemalloc functions.
 # define JEMALLOC_NO_DEMANGLE

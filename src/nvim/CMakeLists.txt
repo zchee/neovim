@@ -392,6 +392,11 @@ if(CMAKE_VERSION VERSION_LESS "2.8.8")
   include_directories(${LUA_PREFERRED_INCLUDE_DIRS})
 endif()
 
+# Don't use tcmalloc in the unit test library.
+if(TCMALLOC_FOUND)
+  list(APPEND NVIM_EXEC_LINK_LIBRARIES ${TCMALLOC_LIBRARIES})
+endif()
+
 # Don't use jemalloc in the unit test library.
 if(JEMALLOC_FOUND)
   list(APPEND NVIM_EXEC_LINK_LIBRARIES ${JEMALLOC_LIBRARIES})

@@ -42,7 +42,11 @@ if(Iconv_FOUND)
   set(HAVE_ICONV 1)
 endif()
 
-if(JEMALLOC_FOUND)
+if(TCMALLOC_FOUND)
+  set(HAVE_TCMALLOC 1)
+endif()
+
+if(JEMALLOC_FOUND AND NOT TCMALLOC_FOUND)
   set(HAVE_JEMALLOC 1)
 endif()
 

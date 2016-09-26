@@ -20,6 +20,7 @@ set(DEPS_DOWNLOAD_DIR "${DEPS_BUILD_DIR}/downloads" CACHE PATH "Dependencies dow
 option(USE_BUNDLED "Use bundled dependencies." ON)
 
 option(USE_BUNDLED_JEMALLOC "Use the bundled jemalloc." ${USE_BUNDLED})
+option(USE_BUNDLED_TCMALLOC "Use the bundled tcmalloc." ${USE_BUNDLED})
 option(USE_BUNDLED_UNIBILIUM "Use the bundled unibilium." ${USE_BUNDLED})
 option(USE_BUNDLED_LIBTERMKEY "Use the bundled libtermkey." ${USE_BUNDLED})
 option(USE_BUNDLED_LIBVTERM "Use the bundled libvterm." ${USE_BUNDLED})
@@ -128,6 +129,9 @@ set(JEMALLOC_SHA256 9409d85664b4f135b77518b0b118c549009dc10f6cba14557d170476611f
 # set(JEMALLOC_URL https://github.com/jemalloc/jemalloc/archive/dev.tar.gz)
 # set(JEMALLOC_SHA256 5630650d5c1caab95d2f0898de4fe5ab8519dc680b04963b38bb425ef6a42d57)
 
+set(TCMALLOC_URL https://github.com/gperftools/gperftools/archive/master.tar.gz)
+set(TCMALLOC_SHA256 5630650d5c1caab95d2f0898de4fe5ab8519dc680b04963b38bb425ef6a42d57)
+
 set(LUV_URL https://github.com/luvit/luv/archive/1.9.1-1.tar.gz)
 set(LUV_SHA256 562b9efaad30aa051a40eac9ade0c3df48bb8186763769abe47ec3fb3edb1268)
 
@@ -180,6 +184,10 @@ endif()
 
 if(USE_BUNDLED_LUAROCKS)
   include(BuildLuarocks)
+endif()
+
+if(USE_BUNDLED_TCMALLOC)
+  include(BuildTcMalloc)
 endif()
 
 if(USE_BUNDLED_JEMALLOC)

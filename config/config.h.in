@@ -61,6 +61,10 @@
 #cmakedefine FEAT_TUI
 
 #ifndef UNIT_TESTING
+#cmakedefine HAVE_TCMALLOC
+#endif
+
+#ifndef UNIT_TESTING
 #cmakedefine HAVE_JEMALLOC
 #endif
 
