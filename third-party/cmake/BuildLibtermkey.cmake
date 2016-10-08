@@ -43,6 +43,7 @@ ExternalProject_Add(libtermkey
                               PREFIX=${DEPS_INSTALL_DIR}
                               PKG_CONFIG_PATH=${DEPS_LIB_DIR}/pkgconfig
                               CFLAGS=-fPIC
+                              CFLAGS+=${CMAKE_C_FLAGS}
                               install)
 endif()
 

@@ -36,7 +36,11 @@ function(BuildLuajit)
 endfunction()
 
 set(INSTALLCMD_UNIX ${MAKE_PRG} CFLAGS=-fPIC
-                                CFLAGS+=-DLUAJIT_DISABLE_JIT
+                                # fail if set -flto
+                                CFLAGS+=-march=native
+                                CFLAGS+=-Ofast
+                                # Why disable JIT Compile?
+                                # CFLAGS+=-DLUAJIT_DISABLE_JIT
                                 CFLAGS+=-DLUA_USE_APICHECK
                                 CFLAGS+=-DLUA_USE_ASSERT
                                 CCDEBUG+=-g

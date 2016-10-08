@@ -90,10 +90,14 @@ set(NVIM_VERSION_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Default to -O2 on release builds.
-if(CMAKE_C_FLAGS_RELEASE MATCHES "-O3")
+# Replace the -O3 to -O2, if not matches '-O' in CMAKE_C_FLAGS
+if(NOT CMAKE_C_FLAGS MATCHES "-O" AND CMAKE_C_FLAGS_RELEASE MATCHES "-O3")
   message(STATUS "Replacing -O3 in CMAKE_C_FLAGS_RELEASE with -O2.")
   string(REPLACE "-O3" "-O2" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+# If matches '-O' in CMAKE_C_FLAGS, remove
+elseif(CMAKE_C_FLAGS MATCHES "-O" AND CMAKE_C_FLAGS_RELEASE MATCHES "-O3")
+  message(STATUS "Removing -O3 in CMAKE_C_FLAGS_RELEASE.")
+  string(REPLACE "-O3" "" CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 endif()
 
 # Minimize logging for release-type builds.

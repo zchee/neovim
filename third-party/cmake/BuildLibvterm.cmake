@@ -49,6 +49,7 @@ else()
   set(LIBVTERM_INSTALL_COMMAND ${MAKE_PRG} CC=${DEPS_C_COMPILER}
                                 PREFIX=${DEPS_INSTALL_DIR}
                                 CFLAGS=-fPIC
+                                CFLAGS+=${CMAKE_C_FLAGS}
                                 install)
 endif()
 
