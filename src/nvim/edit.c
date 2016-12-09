@@ -2457,7 +2457,6 @@ static void ins_compl_upd_pum(void)
 
   if (compl_match_array != NULL) {
     h = curwin->w_cline_height;
-    update_screen(0);
     if (h != curwin->w_cline_height)
       ins_compl_del_pum();
   }
@@ -2526,9 +2525,6 @@ void ins_compl_show_pum(void)
 
   /* Dirty hard-coded hack: remove any matchparen highlighting. */
   do_cmdline_cmd("if exists('g:loaded_matchparen')|3match none|endif");
-
-  /* Update the screen before drawing the popup menu over it. */
-  update_screen(0);
 
   if (compl_match_array == NULL) {
     array_changed = true;
@@ -2630,6 +2626,9 @@ void ins_compl_show_pum(void)
   // In Replace mode when a $ is displayed at the end of the line only
   // part of the screen would be updated.  We do need to redraw here.
   dollar_vcol = -1;
+
+  /* Update the screen before drawing the popup menu over it. */
+  update_screen(0);
 
   // Compute the screen column of the start of the completed text.
   // Use the cursor to get all wrapping and other settings right.

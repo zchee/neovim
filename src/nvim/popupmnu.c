@@ -657,7 +657,7 @@ static int pum_set_selected(int n, int repeat)
 
             // Return cursor to where we were
             validate_cursor();
-            redraw_later(SOME_VALID);
+            redraw_win_later(curwin, REDRAW_TOP);
 
             // When the preview window was resized we need to
             // update the view on the buffer.  Only go back to
@@ -673,7 +673,7 @@ static int pum_set_selected(int n, int repeat)
             // Update the screen before drawing the popup menu.
             // Enable updating the status lines.
             pum_is_visible = false;
-            update_screen(0);
+            win_redr_status(curwin);
             pum_is_visible = true;
 
             if (!resized && win_valid(curwin_save)) {
@@ -685,7 +685,7 @@ static int pum_set_selected(int n, int repeat)
             // May need to update the screen again when there are
             // autocommands involved.
             pum_is_visible = false;
-            update_screen(0);
+            win_redr_status(curwin);
             pum_is_visible = true;
           }
         }
