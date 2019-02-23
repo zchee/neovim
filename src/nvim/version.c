@@ -58,6 +58,12 @@ static char *features[] = {
 "-iconv",
 #endif
 
+#ifdef HAVE_TCMALLOC
+"+tcmalloc",
+#else
+"-tcmalloc",
+#endif
+
 #ifdef FEAT_TUI
 "+tui",
 #else

@@ -20,15 +20,35 @@
 #include "nvim/sign.h"
 #include "nvim/api/vim.h"
 
+#ifdef HAVE_TCMALLOC
+// Force tc_ prefix on tmalloc functions.
+# define TCMALLOC_NO_DEMANGLE
+# include <gperftools/tcmalloc.h>
+#endif
+
 #ifdef UNIT_TESTING
 # define malloc(size) mem_malloc(size)
 # define calloc(count, size) mem_calloc(count, size)
 # define realloc(ptr, size) mem_realloc(ptr, size)
 # define free(ptr) mem_free(ptr)
+# ifdef HAVE_TCMALLOC
+MemMalloc mem_malloc = &tc_malloc;
+MemFree mem_free = &tc_free;
+MemCalloc mem_calloc = &tc_calloc;
+MemRealloc mem_realloc = &tc_realloc;
+# else
 MemMalloc mem_malloc = &malloc;
 MemFree mem_free = &free;
 MemCalloc mem_calloc = &calloc;
 MemRealloc mem_realloc = &realloc;
+# endif
+#else
+# ifdef HAVE_TCMALLOC
+#  define malloc(size) tc_malloc(size)
+#  define calloc(count, size) tc_calloc(count, size)
+#  define realloc(ptr, size) tc_realloc(ptr, size)
+#  define free(ptr) tc_free(ptr)
+# endif
 #endif
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
@@ -698,4 +718,3 @@ void free_all_mem(void)
 }
 
 #endif
-
