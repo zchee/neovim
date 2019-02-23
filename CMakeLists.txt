@@ -458,6 +458,22 @@ if(ENABLE_LIBICONV)
   include_directories(SYSTEM ${Iconv_INCLUDE_DIRS})
 endif()
 
+if (ENABLE_TCMALLOC)
+  if(CLANG_ASAN_UBSAN OR CLANG_MSAN OR CLANG_TSAN)
+    message(STATUS "Sanitizers have been enabled; don't use tcmalloc.")
+  else()
+    find_package(TcMalloc)
+    if(TCMALLOC_FOUND)
+      include_directories(SYSTEM ${TCMALLOC_INCLUDE_DIRS})
+      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
+      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
+      # Required for non c++ build. needs CMAKE_EXE_LINKER_FLAGS only.
+      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++")
+      set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -D_THREAD_SAFE")
+    endif()
+  endif()
+endif()
+
 if(ENABLE_LIBINTL)
   # LibIntl (not Intl) selects our FindLibIntl.cmake script. #8464
   find_package(LibIntl REQUIRED)

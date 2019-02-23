@@ -42,3 +42,30 @@ int tv_dict_add(dict_T *const d, dictitem_T *const item)
 {
   __coverity_escape__(item);
 }
+
+
+// Issue 2422
+//
+// Teach coverity about jemalloc functions, so that it understands
+// they are equivalent to malloc ones.
+
+void *tc_malloc(size_t size)
+{
+  return __coverity_alloc__(size);
+}
+
+void tc_free(void *ptr)
+{
+  __coverity_free__(ptr);
+}
+
+void *tc_calloc(size_t count, size_t size)
+{
+  return tc_malloc(count * size);
+}
+
+void *tc_realloc(void *ptr, size_t size)
+{
+  tc_free(ptr);
+  return tc_malloc(size);
+}
