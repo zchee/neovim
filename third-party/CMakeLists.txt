@@ -30,6 +30,7 @@ set(DEPS_DOWNLOAD_DIR "${DEPS_BUILD_DIR}/downloads" CACHE PATH "Dependencies dow
 option(USE_BUNDLED "Use bundled dependencies." ON)
 
 option(USE_BUNDLED_GPERF "Use the bundled version of gperf." ${USE_BUNDLED})
+option(USE_BUNDLED_JEMALLOC "Use the bundled jemalloc." ${USE_BUNDLED})
 option(USE_BUNDLED_UNIBILIUM "Use the bundled unibilium." ${USE_BUNDLED})
 option(USE_BUNDLED_LIBTERMKEY "Use the bundled libtermkey." ${USE_BUNDLED})
 option(USE_BUNDLED_LIBVTERM "Use the bundled libvterm." ${USE_BUNDLED})
@@ -172,6 +173,9 @@ set(LUV_SHA256 2b17921e2e18094df6221e3cd291c82d4569e50d8c081518d3e775dceae267cf)
 set(LUA_COMPAT53_URL https://github.com/keplerproject/lua-compat-5.3/archive/v0.7.tar.gz)
 set(LUA_COMPAT53_SHA256 bec3a23114a3d9b3218038309657f0f506ad10dfbc03bb54e91da7e5ffdba0a2)
 
+set(JEMALLOC_URL https://github.com/jemalloc/jemalloc/archive/dev.tar.gz)
+set(JEMALLOC_SHA256 SKIP)
+
 set(GPERF_URL https://github.com/neovim/deps/raw/ff5b4b18a87397a8564016071ae64f64bcd8c635/opt/gperf-3.1.tar.gz)
 set(GPERF_SHA256 588546b945bba4b70b6a3a616e80b4ab466e3f33024a352fc2198112cdbb3ae2)
 
@@ -232,6 +236,10 @@ endif()
 
 if(USE_BUNDLED_LUAROCKS)
   include(BuildLuarocks)
+endif()
+
+if(USE_BUNDLED_JEMALLOC)
+  include(BuildJeMalloc)
 endif()
 
 if(USE_BUNDLED_LUV)

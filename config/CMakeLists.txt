@@ -44,6 +44,10 @@ if(Iconv_FOUND)
   set(HAVE_ICONV 1)
 endif()
 
+if(JEMALLOC_FOUND)
+  set(HAVE_JEMALLOC 1)
+endif()
+
 check_function_exists(opendir HAVE_OPENDIR)
 check_function_exists(readlink HAVE_READLINK)
 check_function_exists(setpgid HAVE_SETPGID)

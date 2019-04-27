@@ -460,7 +460,11 @@ endif()
 
 set(NVIM_EXEC_LINK_LIBRARIES ${NVIM_LINK_LIBRARIES} ${LUA_PREFERRED_LIBRARIES})
 
-# Add IPO flags (for LTO), or error if CMake does not know the flags. #8654
+# Don't use jemalloc in the unit test library.
+if(JEMALLOC_FOUND)
+  list(APPEND NVIM_EXEC_LINK_LIBRARIES ${JEMALLOC_LIBRARIES})
+endif()
+
 if(POLICY CMP0069)
   cmake_policy(SET CMP0069 NEW)
 endif()
@@ -475,6 +479,7 @@ set_property(TARGET nvim APPEND PROPERTY
              INCLUDE_DIRECTORIES ${LUA_PREFERRED_INCLUDE_DIRS})
 set_property(TARGET nvim PROPERTY ENABLE_EXPORTS TRUE)
 
+# Add IPO flags (for LTO), or error if CMake does not know the flags. #8654
 if(ENABLE_LTO AND (POLICY CMP0069))
   include(CheckIPOSupported)
   check_ipo_supported(RESULT IPO_SUPPORTED)

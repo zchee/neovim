@@ -58,6 +58,12 @@ static char *features[] = {
 "-iconv",
 #endif
 
+#ifdef HAVE_JEMALLOC
+"+jemalloc",
+#else
+"-jemalloc",
+#endif
+
 #ifdef FEAT_TUI
 "+tui",
 #else
