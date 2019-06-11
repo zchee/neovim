@@ -42,3 +42,29 @@ int tv_dict_add(dict_T *const d, dictitem_T *const item)
 {
   __coverity_escape__(item);
 }
+
+// Issue 2422
+//
+// Teach coverity about rpmalloc functions, so that it understands
+// they are equivalent to malloc ones.
+
+void *rpmalloc(size_t size)
+{
+  return __coverity_alloc__(size);
+}
+
+void rpfree(void *ptr)
+{
+  __coverity_free__(ptr);
+}
+
+void *rpcalloc(size_t count, size_t size)
+{
+  return rpmalloc(count * size);
+}
+
+void *rprealloc(void *ptr, size_t size)
+{
+  rpfree(ptr);
+  return rpmalloc(size);
+}

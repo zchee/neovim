@@ -38,6 +38,7 @@ option(USE_BUNDLED_MSGPACK "Use the bundled msgpack." ${USE_BUNDLED})
 option(USE_BUNDLED_LUAJIT "Use the bundled version of luajit." ${USE_BUNDLED})
 option(USE_BUNDLED_LUAROCKS "Use the bundled version of luarocks." ${USE_BUNDLED})
 option(USE_BUNDLED_LUV "Use the bundled version of luv." ${USE_BUNDLED})
+option(USE_BUNDLED_RPMALLOC "Use the bundled rpmalloc." ${USE_BUNDLED})
 #XXX(tarruda): Lua is only used for debugging the functional test client, no
 # build it unless explicitly requested
 option(USE_BUNDLED_LUA "Use the bundled version of lua." OFF)
@@ -169,6 +170,9 @@ set(LUV_VERSION 1.30.1-1)
 set(LUV_URL https://github.com/luvit/luv/archive/${LUV_VERSION}.tar.gz)
 set(LUV_SHA256 2b17921e2e18094df6221e3cd291c82d4569e50d8c081518d3e775dceae267cf)
 
+set(RPMALLOC_URL https://github.com/rampantpixels/rpmalloc/archive/develop.tar.gz)
+set(RPMALLOC_SHA256 SKIP)
+
 set(LUA_COMPAT53_URL https://github.com/keplerproject/lua-compat-5.3/archive/v0.7.tar.gz)
 set(LUA_COMPAT53_SHA256 bec3a23114a3d9b3218038309657f0f506ad10dfbc03bb54e91da7e5ffdba0a2)
 
@@ -232,6 +236,10 @@ endif()
 
 if(USE_BUNDLED_LUAROCKS)
   include(BuildLuarocks)
+endif()
+
+if(USE_BUNDLED_RPMALLOC)
+  include(BuildRpMalloc)
 endif()
 
 if(USE_BUNDLED_LUV)
