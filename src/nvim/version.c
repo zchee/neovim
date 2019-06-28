@@ -57,6 +57,12 @@ static char *features[] = {
 "-iconv",
 #endif
 
+#ifdef HAVE_MIMALLOC
+"+mimalloc",
+#else
+"-mimalloc",
+#endif
+
 #ifdef FEAT_TUI
 "+tui",
 #else

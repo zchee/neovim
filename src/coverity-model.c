@@ -34,6 +34,32 @@ int uv_pipe_open(struct uv_pipe_s *handle, int fd)
   return result;
 }
 
+// // Issue 2422
+// //
+// // Teach coverity about jemalloc functions, so that it understands
+// // they are equivalent to malloc ones.
+// 
+// void *mi_malloc(size_t size)
+// {
+//   return __coverity_alloc__(size);
+// }
+// 
+// void mi_free(void *ptr)
+// {
+//   __coverity_free__(ptr);
+// }
+// 
+// void *mi_calloc(size_t count, size_t size)
+// {
+//   return mi_malloc(count * size);
+// }
+// 
+// void *mi_realloc(void *ptr, size_t size)
+// {
+//   mi_free(ptr);
+//   return mi_malloc(size);
+// }
+
 // Hint Coverity that adding item to d avoids losing track
 // of the memory allocated for item.
 typedef struct {} dictitem_T;

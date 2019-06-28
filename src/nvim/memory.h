@@ -41,6 +41,19 @@ extern bool entered_free_all_mem;
 # include "memory.h.generated.h"
 #endif
 
+// #ifdef HAVE_MIMALLOC
+// // Force mi_ prefix on mimalloc functions.
+// # include <mimalloc.h>
+// #define XFREE_CLEAR(ptr) \
+//   do { \
+//     /* Take the address to avoid double evaluation. #1375 */ \
+//     void **ptr_ = (void **)&(ptr); \
+//     mi_free(*ptr_); \
+//     /* coverity[dead-store] */ \
+//     *ptr_ = NULL; \
+//     (void)(*ptr_); \
+//   } while (0)
+// #else
 #define XFREE_CLEAR(ptr) \
   do { \
     /* Take the address to avoid double evaluation. #1375 */ \
@@ -50,5 +63,6 @@ extern bool entered_free_all_mem;
     *ptr_ = NULL; \
     (void)(*ptr_); \
   } while (0)
+// #endif
 
 #endif  // NVIM_MEMORY_H

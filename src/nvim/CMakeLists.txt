@@ -456,16 +456,42 @@ if(UNIX)
   )
 endif()
 
+# find_package(mimalloc 1.0 REQUIRED)
+# set(NVIM_EXEC_LINK_LIBRARIES ${NVIM_LINK_LIBRARIES} ${LUA_PREFERRED_LIBRARIES} mimalloc-static)
 set(NVIM_EXEC_LINK_LIBRARIES ${NVIM_LINK_LIBRARIES} ${LUA_PREFERRED_LIBRARIES})
+
+# Don't use mimalloc in the unit test library.
+if(MIMALLOC_FOUND)
+  list(APPEND NVIM_EXEC_LINK_LIBRARIES ${MIMALLOC_LIBRARIES})
+endif()
+# if (ENABLE_MIMALLOC)
+#   # find_package(MiMalloc REQUIRED)
+#   # find_package(mimalloc 1.0 REQUIRED)
+#   # if(MIMALLOC_FOUND)
+#   # include_directories(SYSTEM ${MIMALLOC_INCLUDE_DIRS})
+#   # list(APPEND NVIM_EXEC_LINK_LIBRARIES ${MIMALLOC_LIBRARIES})
+#   # endif()
+#   # target_link_libraries(nvim PUBLIC mimalloc-static)
+# endif()
 
 # Add IPO flags (for LTO), or error if CMake does not know the flags. #8654
 if(POLICY CMP0069)
   cmake_policy(SET CMP0069 NEW)
 endif()
 
-add_executable(nvim ${NVIM_GENERATED_FOR_SOURCES} ${NVIM_GENERATED_FOR_HEADERS}
+# find_package(mimalloc 1.7 REQUIRED)
+# if(MIMALLOC_FOUND)
+# add_executable(nvim ${MIMALLOC_LIBRARY}/mimalloc.o)
+# endif()
+# if(MIMALLOC_FOUND)
+add_executable(nvim ${DEPS_PREFIX}/lib/mimalloc.o ${NVIM_GENERATED_FOR_SOURCES} ${NVIM_GENERATED_FOR_HEADERS}
   ${NVIM_GENERATED_SOURCES} ${NVIM_SOURCES} ${NVIM_HEADERS}
   ${XDIFF_SOURCES} ${XDIFF_HEADERS})
+# else()
+# add_executable(nvim ${NVIM_GENERATED_FOR_SOURCES} ${NVIM_GENERATED_FOR_HEADERS}
+#   ${NVIM_GENERATED_SOURCES} ${NVIM_SOURCES} ${NVIM_HEADERS}
+#   ${XDIFF_SOURCES} ${XDIFF_HEADERS})
+# endif()
 target_link_libraries(nvim ${NVIM_EXEC_LINK_LIBRARIES})
 install_helper(TARGETS nvim)
 

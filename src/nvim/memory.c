@@ -22,15 +22,53 @@
 #include "nvim/lua/executor.h"
 #include "nvim/decoration.h"
 
+#ifdef HAVE_MIMALLOC
+// Force mi_ prefix on mimalloc functions.
+# include <mimalloc.h>
+#endif
+
 #ifdef UNIT_TESTING
 # define malloc(size) mem_malloc(size)
 # define calloc(count, size) mem_calloc(count, size)
 # define realloc(ptr, size) mem_realloc(ptr, size)
 # define free(ptr) mem_free(ptr)
+// # ifdef HAVE_MIMALLOC
+// MemMalloc mem_malloc = &mi_malloc;
+// MemFree mem_free = &mi_free;
+// MemCalloc mem_calloc = &mi_calloc;
+// MemRealloc mem_realloc = &mi_realloc;
+// # else
 MemMalloc mem_malloc = &malloc;
 MemFree mem_free = &free;
 MemCalloc mem_calloc = &calloc;
 MemRealloc mem_realloc = &realloc;
+// # endif
+// #else
+// # ifdef HAVE_MIMALLOC
+// // Standard C allocation
+// #  define malloc(n)               mi_malloc(n)
+// #  define calloc(n,c)             mi_calloc(n,c)
+// #  define realloc(p,n)            mi_realloc(p,n)
+// #  define free(p)                 mi_free(p)
+// 
+// #  define strdup(s)               mi_strdup(s)
+// #  define strndup(s,n)              mi_strndup(s,n)
+// #  define realpath(f,n)           mi_realpath(f,n)
+// 
+// // Various Posix and Unix variants
+// #  define reallocf(p,n)           mi_reallocf(p,n)
+// #  define malloc_size(p)          mi_usable_size(p)
+// #  define malloc_usable_size(p)   mi_usable_size(p)
+// #  define cfree(p)                mi_free(p)
+// 
+// #  define valloc(n)               mi_valloc(n)
+// #  define pvalloc(n)              mi_pvalloc(n)
+// #  define reallocarray(p,s,n)     mi_reallocarray(p,s,n)
+// #  define memalign(a,n)           mi_memalign(a,n)
+// #  define aligned_alloc(a,n)      mi_aligned_alloc(a,n)
+// #  define posix_memalign(p,a,n)   mi_posix_memalign(p,a,n)
+// #  define _posix_memalign(p,a,n)  mi_posix_memalign(p,a,n)
+// # endif
 #endif
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS

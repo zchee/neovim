@@ -54,6 +54,7 @@
 #cmakedefine FEAT_TUI
 
 #ifndef UNIT_TESTING
+#cmakedefine HAVE_MIMALLOC
 #cmakedefine LOG_LIST_ACTIONS
 #endif
 
