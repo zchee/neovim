@@ -458,7 +458,23 @@ if(UNIX)
   )
 endif()
 
+# find_package(mimalloc 1.0 REQUIRED)
+# set(NVIM_EXEC_LINK_LIBRARIES ${NVIM_LINK_LIBRARIES} ${LUA_PREFERRED_LIBRARIES} mimalloc-static)
 set(NVIM_EXEC_LINK_LIBRARIES ${NVIM_LINK_LIBRARIES} ${LUA_PREFERRED_LIBRARIES})
+
+# Don't use mimalloc in the unit test library.
+if(MIMALLOC_FOUND)
+  list(APPEND NVIM_EXEC_LINK_LIBRARIES ${MIMALLOC_LIBRARIES})
+endif()
+# if (ENABLE_MIMALLOC)
+#   # find_package(MiMalloc REQUIRED)
+#   # find_package(mimalloc 1.0 REQUIRED)
+#   # if(MIMALLOC_FOUND)
+#   # include_directories(SYSTEM ${MIMALLOC_INCLUDE_DIRS})
+#   # list(APPEND NVIM_EXEC_LINK_LIBRARIES ${MIMALLOC_LIBRARIES})
+#   # endif()
+#   # target_link_libraries(nvim PUBLIC mimalloc-static)
+# endif()
 
 # Add IPO flags (for LTO), or error if CMake does not know the flags. #8654
 if(POLICY CMP0069)
