@@ -139,38 +139,43 @@ if(WIN32)
   set(LIBUV_URL https://github.com/neovim/libuv/archive/b899d12b0d56d217f31222da83f8c398355b69ef.tar.gz)
   set(LIBUV_SHA256 eb7e37b824887e1b31a4e31d1d9bad4c03d8b98532d9cce5f67a3b70495a4b2a)
 else()
-  set(LIBUV_URL https://github.com/libuv/libuv/archive/v1.34.2.tar.gz)
-  set(LIBUV_SHA256 0d9d38558b45c006c1ea4e8529bae64caf8becda570295ea74e3696362aeb7f2)
+  set(LIBUV_URL https://github.com/libuv/libuv/archive/v1.x.tar.gz)
+  set(LIBUV_SHA256 SKIP)
 endif()
 
-set(MSGPACK_URL https://github.com/msgpack/msgpack-c/releases/download/cpp-3.0.0/msgpack-3.0.0.tar.gz)
-set(MSGPACK_SHA256 bfbb71b7c02f806393bc3cbc491b40523b89e64f83860c58e3e54af47de176e4)
+set(MSGPACK_URL https://github.com/msgpack/msgpack-c/archive/c_master.tar.gz)
+set(MSGPACK_SHA256 SKIP)
 
 # https://github.com/LuaJIT/LuaJIT/tree/v2.1
-set(LUAJIT_URL https://github.com/LuaJIT/LuaJIT/archive/1d8b747c161db457e032a023ebbff511f5de5ec2.tar.gz)
-set(LUAJIT_SHA256 20a159c38a98ecdb6368e8d655343b6036622a29a1621da9dc303f7ed9bf37f3)
+set(LUAJIT_URL https://github.com/LuaJIT/LuaJIT/archive/v2.1.tar.gz)
+set(LUAJIT_SHA256 SKIP)
 
 set(LUA_URL https://www.lua.org/ftp/lua-5.1.5.tar.gz)
 set(LUA_SHA256 2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333)
 
-set(LUAROCKS_URL https://github.com/luarocks/luarocks/archive/v3.2.1.tar.gz)
-set(LUAROCKS_SHA256 0cab9f79311083f33e4d8f5a76021604f1d3f7141ce9a2ef1d8b717d92058370)
+set(LUAROCKS_URL https://github.com/luarocks/luarocks/archive/v3.4.0.tar.gz)
+set(LUAROCKS_SHA256 982b00ad0d56d3f48a512000efeac88e9d6e663a62768d8a024a7cec9a665f45)
 
-set(UNIBILIUM_URL https://github.com/neovim/unibilium/archive/92d929f.tar.gz)
-set(UNIBILIUM_SHA256 29815283c654277ef77a3adcc8840db79ddbb20a0f0b0c8f648bd8cd49a02e4b)
+# set(UNIBILIUM_URL https://github.com/neovim/unibilium/archive/92d929f.tar.gz)
+# set(UNIBILIUM_SHA256 29815283c654277ef77a3adcc8840db79ddbb20a0f0b0c8f648bd8cd49a02e4b)
+set(UNIBILIUM_URL https://github.com/neovim/unibilium/archive/v2.0.0.tar.gz)
+set(UNIBILIUM_SHA256 SKIP)
 
-set(LIBTERMKEY_URL http://www.leonerd.org.uk/code/libtermkey/libtermkey-0.22.tar.gz)
-set(LIBTERMKEY_SHA256 6945bd3c4aaa83da83d80a045c5563da4edd7d0374c62c0d35aec09eb3014600)
+set(LIBTERMKEY_URL https://github.com/neovim//libtermkey/archive/b7fe3af141c53cce71a244282b69ea860452120a.tar.gz)
+set(LIBTERMKEY_SHA256 SKIP)
 
 set(LIBVTERM_URL http://www.leonerd.org.uk/code/libvterm/libvterm-0.1.4.tar.gz)
 set(LIBVTERM_SHA256 bc70349e95559c667672fc8c55b9527d9db9ada0fb80a3beda533418d782d3dd)
+# set(LIBVTERM_URL https://github.com/neovim/libvterm/archive/master.tar.gz)
+# set(LIBVTERM_SHA256 SKIP)
 
-set(LUV_VERSION 1.30.1-1)
-set(LUV_URL https://github.com/luvit/luv/archive/${LUV_VERSION}.tar.gz)
-set(LUV_SHA256 2b17921e2e18094df6221e3cd291c82d4569e50d8c081518d3e775dceae267cf)
+set(LUV_VERSION 1.36.0-0)
+# set(LUV_URL https://github.com/luvit/luv/archive/${LUV_VERSION}.tar.gz)
+set(LUV_URL https://github.com/luvit/luv/archive/master.tar.gz)
+set(LUV_SHA256 SKIP)
 
-set(LUA_COMPAT53_URL https://github.com/keplerproject/lua-compat-5.3/archive/v0.7.tar.gz)
-set(LUA_COMPAT53_SHA256 bec3a23114a3d9b3218038309657f0f506ad10dfbc03bb54e91da7e5ffdba0a2)
+set(LUA_COMPAT53_URL https://github.com/keplerproject/lua-compat-5.3/archive/e00fd0a415694dc15687593e355441af6dfa30bd.tar.gz)
+set(LUA_COMPAT53_SHA256 SKIP)
 
 set(GPERF_URL https://github.com/neovim/deps/raw/ff5b4b18a87397a8564016071ae64f64bcd8c635/opt/gperf-3.1.tar.gz)
 set(GPERF_SHA256 588546b945bba4b70b6a3a616e80b4ab466e3f33024a352fc2198112cdbb3ae2)
@@ -198,9 +203,13 @@ set(LIBICONV_SHA256 ccf536620a45458d26ba83887a983b96827001e92a13847b45e4925cc891
 
 set(TREESITTER_C_URL https://github.com/tree-sitter/tree-sitter-c/archive/99151b1.tar.gz)
 set(TREESITTER_C_SHA256 950386f9ba77fb6a7e992198d4f219c34238a2bbc005c5f53c4212d0f8772b06)
+# set(TREESITTER_C_URL https://github.com/tree-sitter/tree-sitter-c/archive/master.tar.gz)
+# set(TREESITTER_C_SHA256 SKIP)
 
 set(TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/0.18.0.zip)
 set(TREESITTER_SHA256 ac53b7708ca47161dac7f8e852bd61accb8527d45b7ad72e29e12e8e72dbe440)
+# set(TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/master.tar.gz)
+# set(TREESITTER_SHA256 SKIP)
 
 if(USE_BUNDLED_UNIBILIUM)
   include(BuildUnibilium)
