@@ -51,12 +51,18 @@ if(CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
 else()
   set(AMD64_ABI "")
 endif()
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86")
+  set(CCOPT "--march=native -Ofast")
+else()
+  set(CCOPT "--mcpu=apple-a14")
+endif()
+
 set(INSTALLCMD_UNIX ${MAKE_PRG} CFLAGS=-fPIC
                                 CFLAGS+=-DLUA_USE_APICHECK
-                                CFLAGS+=-funwind-tables
+				CFLAGS+=-funwind-tables
                                 ${NO_STACK_CHECK}
                                 ${AMD64_ABI}
-                                CCDEBUG+=-g
                                 Q=
                                 install)
 
