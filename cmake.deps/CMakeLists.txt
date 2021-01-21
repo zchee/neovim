@@ -93,7 +93,7 @@ endif()
 # When using make, use the $(MAKE) variable to avoid warning about the job
 # server.
 if(CMAKE_GENERATOR MATCHES "Makefiles")
-  set(MAKE_PRG "$(MAKE)")
+  set(MAKE_PRG "${MAKE}")
 endif()
 
 if(MINGW AND CMAKE_GENERATOR MATCHES "Ninja")
@@ -146,24 +146,24 @@ endif()
 include(ExternalProject)
 set_directory_properties(PROPERTIES EP_PREFIX "${DEPS_BUILD_DIR}")
 
-set(LIBUV_URL https://github.com/libuv/libuv/archive/f610339f74f7f0fcd183533d2c965ce1468b44c6.tar.gz)
-set(LIBUV_SHA256 d5f22303ba44ac60d3232b1977b404d23a349ae4e8cb83f00e7122fafe38d8c9)
+set(LIBUV_URL https://github.com/libuv/libuv/archive/v1.x.tar.gz)
+set(LIBUV_SHA256 SKIP)
 
-set(MSGPACK_URL https://github.com/msgpack/msgpack-c/releases/download/c-4.0.0/msgpack-c-4.0.0.tar.gz)
-set(MSGPACK_SHA256 420fe35e7572f2a168d17e660ef981a589c9cbe77faa25eb34a520e1fcc032c8)
+set(MSGPACK_URL https://github.com/msgpack/msgpack-c/archive/c_master.tar.gz)
+set(MSGPACK_SHA256 SKIP)
 
 # https://github.com/LuaJIT/LuaJIT/tree/v2.1
-set(LUAJIT_URL https://github.com/LuaJIT/LuaJIT/archive/6c4826f12c4d33b8b978004bc681eb1eef2be977.tar.gz)
-set(LUAJIT_SHA256 19a911fdd77af69e48fa50749606a9009696f543cc88e898b4480d8d3c8828f5)
+set(LUAJIT_URL https://github.com/openresty/luajit2/archive/v2.1-agentzh.tar.gz)
+set(LUAJIT_SHA256 SKIP)
 
 set(LUA_URL https://www.lua.org/ftp/lua-5.1.5.tar.gz)
 set(LUA_SHA256 2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333)
 
-set(LUAROCKS_URL https://github.com/luarocks/luarocks/archive/v3.8.0.tar.gz)
-set(LUAROCKS_SHA256 ab6612ca9ab87c6984871d2712d05525775e8b50172701a0a1cabddf76de2be7)
+set(LUAROCKS_URL https://github.com/luarocks/luarocks/archive/master.tar.gz)
+set(LUAROCKS_SHA256 SKIP)
 
-set(UNIBILIUM_URL https://github.com/neovim/unibilium/archive/92d929f.tar.gz)
-set(UNIBILIUM_SHA256 29815283c654277ef77a3adcc8840db79ddbb20a0f0b0c8f648bd8cd49a02e4b)
+set(UNIBILIUM_URL https://github.com/neovim/unibilium/archive/v2.1.1.tar.gz)
+set(UNIBILIUM_SHA256 SKIP)
 
 set(LIBTERMKEY_URL https://www.leonerd.org.uk/code/libtermkey/libtermkey-0.22.tar.gz)
 set(LIBTERMKEY_SHA256 6945bd3c4aaa83da83d80a045c5563da4edd7d0374c62c0d35aec09eb3014600)
@@ -171,12 +171,12 @@ set(LIBTERMKEY_SHA256 6945bd3c4aaa83da83d80a045c5563da4edd7d0374c62c0d35aec09eb3
 set(LIBVTERM_URL https://www.leonerd.org.uk/code/libvterm/libvterm-0.3.tar.gz)
 set(LIBVTERM_SHA256 61eb0d6628c52bdf02900dfd4468aa86a1a7125228bab8a67328981887483358)
 
-set(LUV_VERSION 1.44.2-1)
-set(LUV_URL https://github.com/luvit/luv/archive/80c8c00baebe3e994d1616d4b54097c2d6e14834.tar.gz)
-set(LUV_SHA256 bcd3ffc7bc80053ab0ec87f0fe83c7632c7619879b2eb75fba88ddb3bee620e8)
+set(LUV_VERSION 1.43.0-0)
+set(LUV_URL https://github.com/luvit/luv/archive/master.tar.gz)
+set(LUV_SHA256 SKIP)
 
-set(LUA_COMPAT53_URL https://github.com/keplerproject/lua-compat-5.3/archive/v0.9.tar.gz)
-set(LUA_COMPAT53_SHA256 ad05540d2d96a48725bb79a1def35cf6652a4e2ec26376e2617c8ce2baa6f416)
+set(LUA_COMPAT53_URL https://github.com/keplerproject/lua-compat-5.3/archive/master.tar.gz)
+set(LUA_COMPAT53_SHA256 SKIP)
 
 # cat.exe curl.exe curl-ca-bundle.crt diff.exe tee.exe xxd.exe
 set(WINTOOLS_URL https://github.com/neovim/deps/raw/c1e7dd8de9e1b18d11dcfa0a192cd029262e5303/opt/win32tools.zip)
@@ -194,8 +194,8 @@ set(GETTEXT_SHA256 66415634c6e8c3fa8b71362879ec7575e27da43da562c798a8a2f223e6e47
 set(LIBICONV_URL https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.15.tar.gz)
 set(LIBICONV_SHA256 ccf536620a45458d26ba83887a983b96827001e92a13847b45e4925cc8913178)
 
-set(TREESITTER_C_URL https://github.com/tree-sitter/tree-sitter-c/archive/v0.20.2.tar.gz)
-set(TREESITTER_C_SHA256 af66fde03feb0df4faf03750102a0d265b007e5d957057b6b293c13116a70af2 )
+set(TREESITTER_C_URL https://github.com/tree-sitter/tree-sitter-c/archive/master.tar.gz)
+set(TREESITTER_C_SHA256 SKIP)
 
 set(TREESITTER_LUA_URL https://github.com/MunifTanjim/tree-sitter-lua/archive/v0.0.14.tar.gz)
 set(TREESITTER_LUA_SHA256 930d0370dc15b66389869355c8e14305b9ba7aafd36edbfdb468c8023395016d)
@@ -206,8 +206,8 @@ set(TREESITTER_VIM_SHA256 608dcc31a7948cb66ae7f45494620e2e9face1af75598205541f80
 set(TREESITTER_HELP_URL https://github.com/neovim/tree-sitter-vimdoc/archive/v1.2.5.tar.gz)
 set(TREESITTER_HELP_SHA256 379d764937a0e3a38e3f9ce9a62c93ba24211a236c74181dd04ee3b4631472a8)
 
-set(TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/v0.20.7.tar.gz)
-set(TREESITTER_SHA256 b355e968ec2d0241bbd96748e00a9038f83968f85d822ecb9940cbe4c42e182e)
+set(TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/master.tar.gz)
+set(TREESITTER_SHA256 SKIP)
 
 if(USE_BUNDLED_UNIBILIUM)
   include(BuildUnibilium)
