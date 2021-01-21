@@ -91,7 +91,7 @@ endif()
 # When using make, use the $(MAKE) variable to avoid warning about the job
 # server.
 if(CMAKE_GENERATOR MATCHES "Makefiles")
-  set(MAKE_PRG "$(MAKE)")
+  set(MAKE_PRG "${MAKE}")
 endif()
 
 if(MINGW AND CMAKE_GENERATOR MATCHES "Ninja")
@@ -144,37 +144,37 @@ endif()
 
 include(ExternalProject)
 
-set(LIBUV_URL https://github.com/libuv/libuv/archive/v1.42.0.tar.gz)
-set(LIBUV_SHA256 371e5419708f6aaeb8656671f89400b92a9bba6443369af1bb70bcd6e4b3c764)
+set(LIBUV_URL https://github.com/libuv/libuv/archive/v1.x.tar.gz)
+set(LIBUV_SHA256 SKIP)
 
-set(MSGPACK_URL https://github.com/msgpack/msgpack-c/releases/download/cpp-3.0.0/msgpack-3.0.0.tar.gz)
-set(MSGPACK_SHA256 bfbb71b7c02f806393bc3cbc491b40523b89e64f83860c58e3e54af47de176e4)
+set(MSGPACK_URL https://github.com/msgpack/msgpack-c/archive/c_master.tar.gz)
+set(MSGPACK_SHA256 SKIP)
 
 # https://github.com/LuaJIT/LuaJIT/tree/v2.1
-set(LUAJIT_URL https://github.com/LuaJIT/LuaJIT/archive/1d20f33d2905db55fb7191076bbac10f570f9175.tar.gz)
-set(LUAJIT_SHA256 4b6e2fc726ed8bf51fe461d90db9fffbc5c894bbdc862a67d17a70190f1fb07f)
+set(LUAJIT_URL https://github.com/openresty/luajit2/archive/v2.1-agentzh.tar.gz)
+set(LUAJIT_SHA256 SKIP)
 
 set(LUA_URL https://www.lua.org/ftp/lua-5.1.5.tar.gz)
 set(LUA_SHA256 2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333)
 
-set(LUAROCKS_URL https://github.com/luarocks/luarocks/archive/v3.8.0.tar.gz)
-set(LUAROCKS_SHA256 ab6612ca9ab87c6984871d2712d05525775e8b50172701a0a1cabddf76de2be7)
+set(LUAROCKS_URL https://github.com/luarocks/luarocks/archive/master.tar.gz)
+set(LUAROCKS_SHA256 SKIP)
 
-set(UNIBILIUM_URL https://github.com/neovim/unibilium/archive/92d929f.tar.gz)
-set(UNIBILIUM_SHA256 29815283c654277ef77a3adcc8840db79ddbb20a0f0b0c8f648bd8cd49a02e4b)
+set(UNIBILIUM_URL https://github.com/neovim/unibilium/archive/v2.1.1.tar.gz)
+set(UNIBILIUM_SHA256 SKIP)
 
 set(LIBTERMKEY_URL https://www.leonerd.org.uk/code/libtermkey/libtermkey-0.22.tar.gz)
 set(LIBTERMKEY_SHA256 6945bd3c4aaa83da83d80a045c5563da4edd7d0374c62c0d35aec09eb3014600)
 
-set(LIBVTERM_URL https://www.leonerd.org.uk/code/libvterm/libvterm-0.1.4.tar.gz)
-set(LIBVTERM_SHA256 bc70349e95559c667672fc8c55b9527d9db9ada0fb80a3beda533418d782d3dd)
+set(LIBVTERM_URL https://github.com/unofficial-mirror/libvterm/archive/master.tar.gz)
+set(LIBVTERM_SHA256 a7a266a0ed8cba641eac386abf0a5f8aca1bf0c73cd7b290e9f8eef99e82a2e1)
 
 set(LUV_VERSION 1.42.0-1)
-set(LUV_URL https://github.com/luvit/luv/archive/${LUV_VERSION}.tar.gz)
-set(LUV_SHA256 a55563e6da9294ea26f77a2111598aa49188c5806b8bd1e1f4bdf402f340713e)
+set(LUV_URL https://github.com/luvit/luv/archive/master.tar.gz)
+set(LUV_SHA256 SKIP)
 
-set(LUA_COMPAT53_URL https://github.com/keplerproject/lua-compat-5.3/archive/v0.9.tar.gz)
-set(LUA_COMPAT53_SHA256 ad05540d2d96a48725bb79a1def35cf6652a4e2ec26376e2617c8ce2baa6f416)
+set(LUA_COMPAT53_URL https://github.com/keplerproject/lua-compat-5.3/archive/master.tar.gz)
+set(LUA_COMPAT53_SHA256 SKIP)
 
 set(GPERF_URL https://github.com/neovim/deps/raw/ff5b4b18a87397a8564016071ae64f64bcd8c635/opt/gperf-3.1.tar.gz)
 set(GPERF_SHA256 588546b945bba4b70b6a3a616e80b4ab466e3f33024a352fc2198112cdbb3ae2)
@@ -200,11 +200,11 @@ set(GETTEXT_SHA256 66415634c6e8c3fa8b71362879ec7575e27da43da562c798a8a2f223e6e47
 set(LIBICONV_URL https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.15.tar.gz)
 set(LIBICONV_SHA256 ccf536620a45458d26ba83887a983b96827001e92a13847b45e4925cc8913178)
 
-set(TREESITTER_C_URL https://github.com/tree-sitter/tree-sitter-c/archive/v0.20.1.tar.gz)
-set(TREESITTER_C_SHA256 ffcc2ef0eded59ad1acec9aec4f9b0c7dd209fc1a85d85f8b0e81298e3dddcc2)
+set(TREESITTER_C_URL https://github.com/tree-sitter/tree-sitter-c/archive/master.tar.gz)
+set(TREESITTER_C_SHA256 SKIP)
 
-set(TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/v0.20.3.tar.gz)
-set(TREESITTER_SHA256 ab52fe93e0c658cff656b9d10d67cdd29084247052964eba13ed6f0e9fa3bd36)
+set(TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/master.tar.gz)
+set(TREESITTER_SHA256 SKIP)
 
 if(USE_BUNDLED_UNIBILIUM)
   include(BuildUnibilium)

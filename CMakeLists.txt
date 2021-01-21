@@ -349,6 +349,13 @@ if(CI_BUILD)
   endif()
 endif()
 
+add_compile_options(-UHAVE_LOCALE_H -pipe -Wno-macro-redefined -Wno-expansion-to-defined -UHAVE_LOCALE_H)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+  add_compile_options(-march=native -mtune=skylake-avx512 -Ofast)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^aarch64")
+  add_compile_options(-mcpu=apple-a14)
+endif()
+
 option(LOG_LIST_ACTIONS "Add list actions logging" OFF)
 
 add_definitions(-DINCLUDE_GENERATED_DECLARATIONS)
