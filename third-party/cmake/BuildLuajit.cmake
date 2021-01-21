@@ -56,8 +56,13 @@ endif()
 set(INSTALLCMD_UNIX ${MAKE_PRG} CFLAGS=-fPIC
                                 CFLAGS+=-DLUA_USE_APICHECK
                                 CFLAGS+=-DLUA_USE_ASSERT
+                                CFLAGS+=-DLJ_NO_UNWIND
+                                CFLAGS+=-DLJ_NO_UNWIND
                                 ${NO_STACK_CHECK}
                                 ${AMD64_ABI}
+                                CCOPT=-march=native
+                                CCOPT+=-Ofast
+                                CCOPT+=-fomit-frame-pointer
                                 CCDEBUG+=-g
                                 Q=
                                 install)
