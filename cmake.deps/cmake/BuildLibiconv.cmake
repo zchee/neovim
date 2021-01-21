@@ -4,7 +4,6 @@ if(MSVC)
   endif()
   ExternalProject_Add(libiconv
     URL ${LIBICONV_URL}
-    URL_HASH SHA256=${LIBICONV_SHA256}
     DOWNLOAD_NO_PROGRESS TRUE
     DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/libiconv
     PATCH_COMMAND ${CMAKE_COMMAND} -E copy

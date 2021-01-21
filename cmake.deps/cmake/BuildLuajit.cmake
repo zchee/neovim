@@ -20,7 +20,6 @@ function(BuildLuajit)
   endif()
   ExternalProject_Add(${_luajit_TARGET}
     URL ${LUAJIT_URL}
-    URL_HASH SHA256=${LUAJIT_SHA256}
     DOWNLOAD_NO_PROGRESS TRUE
     DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/luajit
     CONFIGURE_COMMAND "${_luajit_CONFIGURE_COMMAND}"
@@ -47,6 +46,11 @@ if(CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
   set(AMD64_ABI "LDFLAGS=-lpthread -lc++abi")
 else()
   set(AMD64_ABI "")
+endif()
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+  set(CCOPT "-march=native -mtune=skylake-avx512 -Ofast")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^aarch64")
+  set(CCOPT "-mcpu=apple-a14")
 endif()
 set(BUILDCMD_UNIX ${MAKE_PRG} CFLAGS=-fPIC
                               CFLAGS+=-DLUA_USE_APICHECK

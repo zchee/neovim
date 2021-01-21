@@ -4,7 +4,6 @@ if(MSVC)
   endif()
   ExternalProject_Add(gettext
     URL ${GETTEXT_URL}
-    URL_HASH SHA256=${GETTEXT_SHA256}
     DOWNLOAD_NO_PROGRESS TRUE
     DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/gettext
     PATCH_COMMAND ${CMAKE_COMMAND} -E copy
