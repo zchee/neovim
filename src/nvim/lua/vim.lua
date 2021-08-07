@@ -58,12 +58,18 @@ for s in  (package.cpath..';'):gmatch('[^;]*;') do
 end
 
 function vim._load_package(name)
+  return vim.startup_profile("require'"..name.."' lookup/parse", function()
   local basename = name:gsub('%.', '/')
   local paths = {"lua/"..basename..".lua", "lua/"..basename.."/init.lua"}
-  local found = vim.api.nvim__get_runtime(paths, false, {is_lua=true})
-  if #found > 0 then
-    local f, err = loadfile(found[1])
-    return f or error(err)
+  for _,path in ipairs(paths) do
+    local found = vim.api.nvim__get_runtime(path, false, {is_lua=true})
+    if #found > 0 then
+      local f, err = loadfile(found[1])
+      if rawget(vim, "_load_hooky") then
+        vim._load_hooky(name, found[1], f)
+      end
+      return f and function() return vim.startup_profile("require'"..name.."' execute", f) end or error(err)
+    end
   end
 
   local so_paths = {}
@@ -72,7 +78,7 @@ function vim._load_package(name)
     table.insert(so_paths, path)
   end
 
-  found = vim.api.nvim__get_runtime(so_paths, false, {is_lua=true})
+  local found = vim.api.nvim__get_runtime(so_paths, false, {is_lua=true})
   if #found > 0 then
     -- Making function name in Lua 5.1 (see src/loadlib.c:mkfuncname) is
     -- a) strip prefix up to and including the first dash, if any
@@ -85,6 +91,7 @@ function vim._load_package(name)
     return f or error(err)
   end
   return nil
+end)
 end
 
 -- Insert vim._load_package after the preloader at position 2
