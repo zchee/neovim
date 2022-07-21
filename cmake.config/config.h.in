@@ -39,13 +39,14 @@
 #ifdef HAVE_SYS_UIO_H
 #cmakedefine HAVE_READV
 # ifndef HAVE_READV
-#  undef HAVE_SYS_UIO_H
+#   undef HAVE_SYS_UIO_H
 # endif
 #endif
 #cmakedefine HAVE_DIRFD_AND_FLOCK
 #cmakedefine HAVE_FORKPTY
 
 #ifndef UNIT_TESTING
+#cmakedefine HAVE_MIMALLOC
 #cmakedefine LOG_LIST_ACTIONS
 #endif
 

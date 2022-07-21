@@ -43,6 +43,15 @@ target_link_libraries(main_lib INTERFACE
   lpeg)
 target_link_libraries(nlua0 PUBLIC lpeg)
 
+option(ENABLE_MIMALLOC "enable mimalloc" ON)
+if(ENABLE_MIMALLOC)
+  find_package(MiMalloc REQUIRED)
+  target_include_directories(main_lib SYSTEM BEFORE INTERFACE ${MIMALLOC_INCLUDE_DIRS})
+  if(MIMALLOC_LIBRARIES)
+    target_link_libraries(main_lib INTERFACE ${MIMALLOC_LIBRARIES})
+  endif()
+endif()
+
 # Libintl (not Intl) selects our FindLibintl.cmake script. #8464
 find_package(Libintl REQUIRED)
 target_include_directories(main_lib SYSTEM BEFORE INTERFACE ${LIBINTL_INCLUDE_DIR})

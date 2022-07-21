@@ -277,6 +277,16 @@ install_helper(
   FILES ${CMAKE_SOURCE_DIR}/src/man/nvim.1
   DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 
+option(ENABLE_MIMALLOC "enable mimalloc" ON)
+
+if(ENABLE_MIMALLOC)
+  if(CLANG_ASAN_UBSAN OR CLANG_MSAN OR CLANG_TSAN)
+    message(STATUS "Sanitizers enabled; disabling mimalloc")
+  else()
+    find_package(MiMalloc REQUIRED)
+  endif()
+endif()
+
 if(EXISTS "${DEPS_PREFIX}/share/nvim-qt")
   option(USE_BUNDLED_NVIMQT "Bundle neovim-qt" ON)
 else()

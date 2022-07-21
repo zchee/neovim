@@ -122,6 +122,21 @@ enum {
 # include "main.c.generated.h"
 #endif
 
+#ifdef HAVE_MIMALLOC
+// Force mi_ prefix on mimalloc functions.
+# include <mimalloc/mimalloc.h>
+
+mi_option_enable(mi_option_eager_commit);
+// mi_option_enable(mi_option_reserve_huge_os_pages);
+mi_option_set(large_os_pages, 1);
+mi_option_set(mi_option_reserve_os_memory, 1);
+// mi_option_enable(mi_option_page_reset);
+// mi_option_enable(mi_option_eager_commit_delay);
+// mi_option_enable(mi_option_allow_decommit);
+// mi_option_enable(mi_option_segment_decommit_delay);
+// mi_option_enable(mi_option_decommit_extend_delay);
+#endif
+
 Loop main_loop;
 
 static char *argv0 = NULL;

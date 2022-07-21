@@ -203,6 +203,9 @@ set(TREESITTER_QUERY_SHA256 SKIP)
 set(TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/master.tar.gz)
 set(TREESITTER_SHA256 SKIP)
 
+set(MIMALLOC_URL https://github.com/microsoft/mimalloc/archive/dev-slice.tar.gz)
+set(MIMALLOC_SHA256 SKIP)
+
 get_cmake_property(ALL_VARIABLES VARIABLES)
 foreach (VAR ${ALL_VARIABLES})
   if(VAR MATCHES "^.*URL$")

@@ -34,15 +34,34 @@
 #include "nvim/usercmd.h"
 #include "nvim/vim.h"
 
+#ifdef HAVE_MIMALLOC
+// Force mi_ prefix on mimalloc functions.
+# include <mimalloc/mimalloc.h>
+#endif
+
 #ifdef UNIT_TESTING
 # define malloc(size) mem_malloc(size)
 # define calloc(count, size) mem_calloc(count, size)
 # define realloc(ptr, size) mem_realloc(ptr, size)
 # define free(ptr) mem_free(ptr)
+# ifdef HAVE_MIMALLOC
+MemMalloc mem_malloc = &mi_malloc;
+MemFree mem_free = &mi_free;
+MemCalloc mem_calloc = &mi_calloc;
+MemRealloc mem_realloc = &mi_realloc;
+# else
 MemMalloc mem_malloc = &malloc;
 MemFree mem_free = &free;
 MemCalloc mem_calloc = &calloc;
 MemRealloc mem_realloc = &realloc;
+# endif
+#else
+# ifdef HAVE_MIMALLOC
+#  define malloc(size) mi_malloc(size)
+#  define calloc(count, size) mi_calloc(count, size)
+#  define realloc(ptr, size) mi_realloc(ptr, size)
+#  define free(ptr) mi_free(ptr)
+# endif
 #endif
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
