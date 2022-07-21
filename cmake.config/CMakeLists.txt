@@ -51,6 +51,11 @@ check_function_exists(getpwent HAVE_GETPWENT)
 check_function_exists(getpwnam HAVE_GETPWNAM)
 check_function_exists(getpwuid HAVE_GETPWUID)
 check_function_exists(readv HAVE_READV)
+
+if(JEMALLOC_FOUND)
+  set(HAVE_JEMALLOC 1)
+endif()
+
 check_function_exists(opendir HAVE_OPENDIR)
 check_function_exists(readlink HAVE_READLINK)
 check_function_exists(setpgid HAVE_SETPGID)

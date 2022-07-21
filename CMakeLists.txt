@@ -305,6 +305,22 @@ install_helper(
   FILES ${CMAKE_SOURCE_DIR}/src/man/nvim.1
   DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 
+if(CMAKE_SYSTEM_NAME MATCHES "OpenBSD|FreeBSD|Windows")  # see #5318
+  message(STATUS "skipping jemalloc on this system: ${CMAKE_SYSTEM_NAME}")
+  option(ENABLE_JEMALLOC "enable jemalloc" OFF)
+else()
+  option(ENABLE_JEMALLOC "enable jemalloc" ON)
+endif()
+
+if(ENABLE_JEMALLOC)
+  if(CLANG_ASAN_UBSAN OR CLANG_MSAN OR CLANG_TSAN)
+    message(STATUS "Sanitizers enabled; disabling jemalloc")
+  else()
+    find_package(JeMalloc REQUIRED)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++")
+  endif()
+endif()
+
 if(EXISTS "${DEPS_PREFIX}/share/nvim-qt")
   option(USE_BUNDLED_NVIMQT "Bundle neovim-qt" ON)
 else()

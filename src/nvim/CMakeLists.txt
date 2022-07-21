@@ -42,6 +42,15 @@ find_package(Iconv REQUIRED)
 target_include_directories(main_lib SYSTEM BEFORE INTERFACE ${Iconv_INCLUDE_DIRS})
 target_link_libraries(main_lib INTERFACE ${Iconv_LIBRARIES})
 
+option(ENABLE_JEMALLOC "enable jemalloc" ON)
+if(ENABLE_JEMALLOC)
+  find_package(JeMalloc REQUIRED)
+  target_include_directories(main_lib SYSTEM BEFORE INTERFACE ${JEMALLOC_INCLUDE_DIRS})
+  if(JEMALLOC_LIBRARIES)
+    target_link_libraries(main_lib INTERFACE ${JEMALLOC_LIBRARIES})
+  endif()
+endif()
+
 option(ENABLE_LIBINTL "enable libintl" ON)
 if(ENABLE_LIBINTL)
   # LibIntl (not Intl) selects our FindLibIntl.cmake script. #8464
