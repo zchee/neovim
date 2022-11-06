@@ -27,15 +27,35 @@
 #include "nvim/ui_compositor.h"
 #include "nvim/vim.h"
 
+#ifdef HAVE_RPMALLOC
+// Force rp prefix on mimalloc functions.
+# include <rpmalloc/rpmalloc.h>
+#endif
+
 #ifdef UNIT_TESTING
 # define malloc(size) mem_malloc(size)
 # define calloc(count, size) mem_calloc(count, size)
 # define realloc(ptr, size) mem_realloc(ptr, size)
 # define free(ptr) mem_free(ptr)
+# ifdef HAVE_RPMALLOC
+MemMalloc mem_malloc = &rpmalloc;
+MemFree mem_free = &rpfree;
+MemCalloc mem_calloc = &rpcalloc;
+MemRealloc mem_realloc = &rprealloc;
+# else
 MemMalloc mem_malloc = &malloc;
 MemFree mem_free = &free;
 MemCalloc mem_calloc = &calloc;
 MemRealloc mem_realloc = &realloc;
+# endif
+#else
+# ifdef HAVE_MIMALLOC
+# include <rpmalloc/rpmalloc.h>
+#  define malloc(size) rpmalloc(size)
+#  define calloc(count, size) rpcalloc(count, size)
+#  define realloc(ptr, size) rprealloc(ptr, size)
+#  define free(ptr) rpfree(ptr)
+# endif
 #endif
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS

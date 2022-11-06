@@ -66,6 +66,12 @@ static char *features[] = {
 #else
   "-tui",
 #endif
+
+#ifdef HAVE_RPMALLOC
+"+rpmalloc",
+#else
+"-rpmalloc",
+#endif
   NULL
 };
 

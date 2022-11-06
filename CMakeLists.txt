@@ -525,6 +525,22 @@ if((CLANG_ASAN_UBSAN OR CLANG_MSAN OR CLANG_TSAN) AND NOT CMAKE_C_COMPILER_ID MA
   message(FATAL_ERROR "Sanitizers are only supported for Clang")
 endif()
 
+if(CMAKE_SYSTEM_NAME MATCHES "OpenBSD|FreeBSD|Windows")  # see #5318
+  message(STATUS "skipping rpmalloc on this system: ${CMAKE_SYSTEM_NAME}")
+  option(ENABLE_RPMALLOC "enable rpmalloc" OFF)
+else()
+  option(ENABLE_RPMALLOC "enable rpmalloc" ON)
+endif()
+
+if(ENABLE_RPMALLOC)
+  if(CLANG_ASAN_UBSAN OR CLANG_MSAN OR CLANG_TSAN)
+    message(STATUS "Sanitizers enabled; disabling mimalloc")
+  else()
+    find_package(RpMalloc REQUIRED)
+    include_directories(SYSTEM ${RPMALLOC_INCLUDE_DIRS})
+  endif()
+endif()
+
 if(ENABLE_LIBICONV)
   find_package(Iconv REQUIRED)
   include_directories(SYSTEM ${Iconv_INCLUDE_DIRS})

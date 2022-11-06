@@ -57,6 +57,7 @@ option(USE_BUNDLED_LUV "Use the bundled version of luv." ${USE_BUNDLED})
 option(USE_BUNDLED_LUA "Use the bundled version of lua." OFF)
 option(USE_BUNDLED_TS_PARSERS "Use the bundled treesitter parsers." ${USE_BUNDLED})
 option(USE_BUNDLED_TS "Use the bundled treesitter runtime." ${USE_BUNDLED})
+option(USE_BUNDLED_RPMALLOC "Use the bundled rpmalloc." ${USE_BUNDLED})
 
 if(USE_BUNDLED AND MSVC)
   option(USE_BUNDLED_GETTEXT "Use the bundled version of gettext." ON)
@@ -175,6 +176,9 @@ set(LUV_VERSION 1.43.0-0)
 set(LUV_URL https://github.com/luvit/luv/archive/master.tar.gz)
 set(LUV_SHA256 SKIP)
 
+set(RPMALLOC_URL https://github.com/mjansson/rpmalloc/archive/develop.tar.gz)
+set(RPMALLOC_SHA256 SKIP)
+
 set(LUA_COMPAT53_URL https://github.com/keplerproject/lua-compat-5.3/archive/master.tar.gz)
 set(LUA_COMPAT53_SHA256 SKIP)
 
@@ -242,6 +246,10 @@ endif()
 
 if(USE_BUNDLED_LUAROCKS)
   include(BuildLuarocks)
+endif()
+
+if(USE_BUNDLED_RPMALLOC)
+  include(BuildRpMalloc)
 endif()
 
 if(USE_BUNDLED_LUV)

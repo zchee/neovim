@@ -87,6 +87,10 @@
 #endif
 #include "nvim/api/extmark.h"
 
+#ifdef HAVE_RPMALLOC
+# include <rpmalloc/rpmalloc.h>
+#endif
+
 // values for "window_layout"
 #define WIN_HOR     1       // "-o" horizontally split windows
 #define WIN_VER     2       // "-O" vertically split windows
@@ -224,6 +228,7 @@ int main(int argc, char **argv)
   }
 #endif
 
+  rpmalloc_initialize();
   argv0 = argv[0];
 
   char_u *fname = NULL;   // file name from command line
@@ -590,6 +595,7 @@ void os_exit(int r)
 {
   exiting = true;
 
+  rpmalloc_finalize();
   ui_flush();
   ui_call_stop();
   ml_close_all(true);           // remove all memfiles
