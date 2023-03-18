@@ -17,7 +17,6 @@ function(BuildLuajit)
 
   ExternalProject_Add(${_luajit_TARGET}
     URL ${LUAJIT_URL}
-    URL_HASH SHA256=${LUAJIT_SHA256}
     DOWNLOAD_NO_PROGRESS TRUE
     DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/luajit
     CONFIGURE_COMMAND "${_luajit_CONFIGURE_COMMAND}"

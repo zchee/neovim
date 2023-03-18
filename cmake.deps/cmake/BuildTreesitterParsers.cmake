@@ -23,7 +23,6 @@ function(BuildTSParser)
 
   ExternalProject_Add(${NAME}
     URL ${URL}
-    URL_HASH SHA256=${HASH}
     DOWNLOAD_NO_PROGRESS TRUE
     DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/${NAME}
     PATCH_COMMAND ${CMAKE_COMMAND} -E copy
