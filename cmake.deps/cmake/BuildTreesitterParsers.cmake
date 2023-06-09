@@ -22,7 +22,6 @@ function(BuildTSParser)
   get_sha(treesitter_${TS_LANG} ${DEPS_IGNORE_SHA})
   ExternalProject_Add(${NAME}
     URL ${URL}
-    ${EXTERNALPROJECT_URL_HASH}
     DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/${NAME}
     PATCH_COMMAND ${CMAKE_COMMAND} -E copy
       ${CMAKE_CURRENT_SOURCE_DIR}/cmake/${TS_CMAKE_FILE}

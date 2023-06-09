@@ -14,7 +14,6 @@ function(BuildLuajit)
   get_sha(luajit ${DEPS_IGNORE_SHA})
   ExternalProject_Add(${_luajit_TARGET}
     URL ${LUAJIT_URL}
-    ${EXTERNALPROJECT_URL_HASH}
     DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/${_luajit_TARGET}
     CONFIGURE_COMMAND "${_luajit_CONFIGURE_COMMAND}"
     BUILD_IN_SOURCE 1

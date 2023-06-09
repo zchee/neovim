@@ -1,7 +1,6 @@
 get_sha(lpeg ${DEPS_IGNORE_SHA})
 ExternalProject_Add(lpeg
   URL ${LPEG_URL}
-  ${EXTERNALPROJECT_URL_HASH}
   DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/lpeg
   PATCH_COMMAND ${CMAKE_COMMAND} -E copy
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/LpegCMakeLists.txt
