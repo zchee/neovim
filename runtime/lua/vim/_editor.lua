@@ -1296,7 +1296,7 @@ function vim.deprecate(name, alternative, version, plugin, backtrace)
       name
     )
 
-    local displayed = vim._truncated_echo_once(msg)
+    -- local displayed = vim._truncated_echo_once(msg)
     return displayed and msg or nil
   else
     vim.validate('name', name, 'string')
