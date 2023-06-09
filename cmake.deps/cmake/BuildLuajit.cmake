@@ -28,8 +28,8 @@ else()
   set(AMD64_ABI "")
 endif()
 set(BUILDCMD_UNIX ${MAKE_PRG} -j CFLAGS=-fPIC
-                              CFLAGS+=-DLUA_USE_APICHECK
                               CFLAGS+=-funwind-tables
+                              CFLAGS+=-Wreturn-mismatch
                               ${NO_STACK_CHECK}
                               ${AMD64_ABI}
                               CCDEBUG+=-g
