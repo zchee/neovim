@@ -6,4 +6,5 @@ ExternalProject_Add(libuv
     -D BUILD_TESTING=OFF
     -D LIBUV_BUILD_SHARED=OFF
     -D UV_LINT_W4=OFF
+    -D CLANG_TIDY_EXE=/opt/homebrew/opt/llvm/bin/clang-tidy
   ${EXTERNALPROJECT_OPTIONS})

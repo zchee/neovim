@@ -214,7 +214,7 @@ function M:open_file()
 
   -- Start message for logging
   self.logfile:write(
-    string.format('[START][%s] %s logging initiated\n', os.date(log_date_format), self.name)
+    -- string.format('[START][%s] %s logging initiated\n', os.date(log_date_format), self.name)
   )
   return true
 end

@@ -1,0 +1,14 @@
+# Injected into wasmtime's source tree by BuildWasmtime.cmake (PATCH_COMMAND).
+#
+# The `fastest-runtime` profile applies `strip = "debuginfo"` to every build
+# unit, including the host proc-macro dylibs that rustc must dlopen at compile
+# time (serde_derive, thiserror_impl, wasmtime's versioned-export-macros, ...).
+# On recent Apple toolchains (Xcode / ld64 on macOS) stripping a proc-macro
+# dylib mis-aligns its __LINKEDIT segment, so dyld refuses to load it and the
+# build fails with a misleading `error[E0463]: can't find crate for ...`.
+#
+# `build-override` scopes the change to build scripts, proc-macros, and their
+# dependencies only -- the shipped libwasmtime artifact keeps the full
+# fastest-runtime optimization (LTO, codegen-units=1, its own stripping).
+[profile.fastest-runtime.build-override]
+strip = "none"
