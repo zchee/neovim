@@ -27,11 +27,21 @@ if(CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
 else()
   set(AMD64_ABI "")
 endif()
+if(APPLE)
+  set(CCOPT "CCOPT=-O3 -fomit-frame-pointer")
+  if(CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
+    set(CCOPT_ARCH "CCOPT_x64=-march=x86-64-v4 -mtune=skylake-avx512 -mavx -mavx2 -mavx512f -mavx512cd -mavx512dq -mavx512bw -mavx512vl -mavx512vnni")
+  elseif(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
+    set(CCOPT_ARCH "CCOPT_arm64=-march=native")
+  endif()
+endif(APPLE)
 set(BUILDCMD_UNIX ${MAKE_PRG} -j CFLAGS=-fPIC
                               CFLAGS+=-DLUA_USE_APICHECK
                               CFLAGS+=-funwind-tables
                               ${NO_STACK_CHECK}
                               ${AMD64_ABI}
+                              ${CCOPT}
+                              ${CCOPT_ARCH}
                               CCDEBUG+=-g
                               Q=)
 
