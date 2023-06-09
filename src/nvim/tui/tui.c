@@ -238,7 +238,7 @@ void tui_handle_term_mode(TUIData *tui, TermMode mode, TermModeState state)
     // The terminal supports changing the given mode
     if (!nvim_testing) {
       // Very noisy in CI, don't log during tests. #33599
-      WLOG("TUI: terminal mode %d detected, state %d", mode, state);
+      // WLOG("TUI: terminal mode %d detected, state %d", mode, state);
     }
     switch (mode) {
     case kTermModeSynchronizedOutput:
