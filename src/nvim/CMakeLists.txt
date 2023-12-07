@@ -379,7 +379,7 @@ if(MSVC)
     ${EXTERNAL_SOURCES} PROPERTIES COMPILE_OPTIONS "-wd4090;-wd4244;-wd4267")
 else()
   set_source_files_properties(
-    ${EXTERNAL_SOURCES} PROPERTIES COMPILE_OPTIONS "-Wno-conversion;-Wno-missing-noreturn;-Wno-missing-format-attribute;-Wno-double-promotion;-Wno-strict-prototypes;-Wno-misleading-indentation;-Wno-sign-compare;-Wno-implicit-fallthrough;-Wno-missing-prototypes;-Wno-missing-field-initializers")
+    ${EXTERNAL_SOURCES} PROPERTIES COMPILE_OPTIONS "-DMULTIPLE_THREADS;-DUSE_INTERNAL_FPCONV;-Wno-conversion;-Wno-missing-noreturn;-Wno-missing-format-attribute;-Wno-double-promotion;-Wno-strict-prototypes;-Wno-misleading-indentation;-Wno-sign-compare;-Wno-implicit-fallthrough;-Wno-missing-prototypes;-Wno-missing-field-initializers")
 endif()
 
 list(APPEND NLUA0_SOURCES ${PROJECT_SOURCE_DIR}/src/nlua0.c)
