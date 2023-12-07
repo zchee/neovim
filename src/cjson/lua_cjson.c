@@ -57,7 +57,7 @@
 #endif
 
 #ifndef CJSON_VERSION
-#define CJSON_VERSION   "2.1.0.9"
+#define CJSON_VERSION   "2.1.0.11"
 #endif
 
 #ifdef _MSC_VER
@@ -87,6 +87,7 @@
 #define DEFAULT_ENCODE_EMPTY_TABLE_AS_OBJECT 0
 #define DEFAULT_DECODE_ARRAY_WITH_ARRAY_MT 0
 #define DEFAULT_ENCODE_ESCAPE_FORWARD_SLASH 1
+#define DEFAULT_ENCODE_SKIP_UNSUPPORTED_VALUE_TYPES 0
 
 #ifdef DISABLE_INVALID_NUMBERS
 #undef DEFAULT_DECODE_INVALID_NUMBERS
@@ -170,6 +171,7 @@ typedef struct {
     int decode_invalid_numbers;
     int decode_max_depth;
     int decode_array_with_array_mt;
+    int encode_skip_unsupported_value_types;
 } json_config_t;
 
 typedef struct {
@@ -190,13 +192,13 @@ typedef struct {
 
 typedef struct {
     json_token_type_t type;
-    int index;
+    size_t index;
     union {
         const char *string;
         double number;
         int boolean;
     } value;
-    int string_len;
+    size_t string_len;
 } json_token_t;
 
 static const char *char2escape[256] = {
@@ -387,6 +389,18 @@ static int json_cfg_decode_array_with_array_mt(lua_State *l)
 }
 */
 
+/* Configure how to treat invalid types */
+/*
+static int json_cfg_encode_skip_unsupported_value_types(lua_State *l)
+{
+    json_config_t *cfg = json_arg_init(l, 1);
+
+    json_enum_option(l, 1, &cfg->encode_skip_unsupported_value_types, NULL, 1);
+
+    return 1;
+}
+*/
+
 /* Configures JSON encoding buffer persistence */
 /*
 static int json_cfg_encode_keep_buffer(lua_State *l)
@@ -502,6 +516,7 @@ static void json_create_config(lua_State *l)
     cfg->encode_empty_table_as_object = DEFAULT_ENCODE_EMPTY_TABLE_AS_OBJECT;
     cfg->decode_array_with_array_mt = DEFAULT_DECODE_ARRAY_WITH_ARRAY_MT;
     cfg->encode_escape_forward_slash = DEFAULT_ENCODE_ESCAPE_FORWARD_SLASH;
+    cfg->encode_skip_unsupported_value_types = DEFAULT_ENCODE_SKIP_UNSUPPORTED_VALUE_TYPES;
 
 #if DEFAULT_ENCODE_KEEP_BUFFER > 0
     strbuf_init(&cfg->encode_buf, 0);
@@ -583,6 +598,8 @@ static void json_append_string(lua_State *l, strbuf_t *json, int lindex)
      * This buffer is reused constantly for small strings
      * If there are any excess pages, they won't be hit anyway.
      * This gains ~5% speedup. */
+    if (len > SIZE_MAX / 6 - 3)
+        abort(); /* Overflow check */
     strbuf_ensure_empty_length(json, len * 6 + 2);
 
     strbuf_append_char_unsafe(json, '\"');
@@ -666,7 +683,7 @@ static void json_check_encode_depth(lua_State *l, json_config_t *cfg,
                current_depth);
 }
 
-static void json_append_data(lua_State *l, json_config_t *cfg,
+static int json_append_data(lua_State *l, json_config_t *cfg,
                              int current_depth, strbuf_t *json);
 
 /* json_append_array args:
@@ -676,19 +693,24 @@ static void json_append_data(lua_State *l, json_config_t *cfg,
 static void json_append_array(lua_State *l, json_config_t *cfg, int current_depth,
                               strbuf_t *json, int array_length)
 {
-    int comma, i;
+    int comma, i, json_pos, err;
 
     strbuf_append_char(json, '[');
 
     comma = 0;
     for (i = 1; i <= array_length; i++) {
-        if (comma)
+        json_pos = strbuf_length(json);
+        if (comma++ > 0)
             strbuf_append_char(json, ',');
-        else
-            comma = 1;
 
         lua_rawgeti(l, -1, i);
-        json_append_data(l, cfg, current_depth, json);
+        err = json_append_data(l, cfg, current_depth, json);
+        if (err) {
+            strbuf_set_length(json, json_pos);
+            if (comma == 1) {
+                comma = 0;
+            }
+        }
         lua_pop(l, 1);
     }
 
@@ -736,7 +758,7 @@ static void json_append_number(lua_State *l, json_config_t *cfg,
 static void json_append_object(lua_State *l, json_config_t *cfg,
                                int current_depth, strbuf_t *json)
 {
-    int comma, keytype;
+    int comma, keytype, json_pos, err;
 
     /* Object */
     strbuf_append_char(json, '{');
@@ -745,10 +767,9 @@ static void json_append_object(lua_State *l, json_config_t *cfg,
     /* table, startkey */
     comma = 0;
     while (lua_next(l, -2) != 0) {
-        if (comma)
+        json_pos = strbuf_length(json);
+        if (comma++ > 0)
             strbuf_append_char(json, ',');
-        else
-            comma = 1;
 
         /* table, key, value */
         keytype = lua_type(l, -2);
@@ -766,7 +787,14 @@ static void json_append_object(lua_State *l, json_config_t *cfg,
         }
 
         /* table, key, value */
-        json_append_data(l, cfg, current_depth, json);
+        err = json_append_data(l, cfg, current_depth, json);
+        if (err) {
+            strbuf_set_length(json, json_pos);
+            if (comma == 1) {
+                comma = 0;
+            }
+        }
+
         lua_pop(l, 1);
         /* table, key */
     }
@@ -774,8 +802,8 @@ static void json_append_object(lua_State *l, json_config_t *cfg,
     strbuf_append_char(json, '}');
 }
 
-/* Serialise Lua data into JSON string. */
-static void json_append_data(lua_State *l, json_config_t *cfg,
+/* Serialise Lua data into JSON string. Return 1 if error an error happened, else 0 */
+static int json_append_data(lua_State *l, json_config_t *cfg,
                              int current_depth, strbuf_t *json)
 {
     int len;
@@ -845,7 +873,7 @@ static void json_append_data(lua_State *l, json_config_t *cfg,
         strbuf_append_mem(json, "null", 4);
         break;
     case LUA_TLIGHTUSERDATA:
-        if (lua_touserdata(l, -1) == &json_array) {
+        if (lua_touserdata(l, -1) == json_lightudata_mask(&json_array)) {
             json_append_array(l, cfg, current_depth, json, 0);
         }
         break;
@@ -862,9 +890,15 @@ static void json_append_data(lua_State *l, json_config_t *cfg,
     default:
         /* Remaining types (LUA_TFUNCTION, LUA_TUSERDATA, LUA_TTHREAD,
          * and LUA_TLIGHTUSERDATA) cannot be serialised */
-        json_encode_exception(l, cfg, json, -1, "type not supported");
+        if (cfg->encode_skip_unsupported_value_types) {
+            return 1;
+        } else {
+            json_encode_exception(l, cfg, json, -1, "type not supported");
+        }
+
         /* never returns */
     }
+    return 0;
 }
 
 static int json_encode(lua_State *l)
@@ -873,7 +907,7 @@ static int json_encode(lua_State *l)
     strbuf_t local_encode_buf;
     strbuf_t *encode_buf;
     char *json;
-    int len;
+    size_t len;
 
     luaL_argcheck(l, lua_gettop(l) == 1, 1, "expected 1 argument");
 
@@ -1138,7 +1172,7 @@ static int json_is_invalid_number(json_parse_t *json)
 
     /* Reject numbers starting with 0x, or leading zeros */
     if (*p == '0') {
-        char ch2 = *(p + 1);
+        int ch2 = *(p + 1);
 
         if ((ch2 | 0x20) == 'x' ||          /* Hex */
             ('0' <= ch2 && ch2 <= '9'))     /* Leading zero */
@@ -1574,6 +1608,7 @@ int lua_cjson_new(lua_State *l)
         { "encode_invalid_numbers", json_cfg_encode_invalid_numbers },
         { "decode_invalid_numbers", json_cfg_decode_invalid_numbers },
         { "encode_escape_forward_slash", json_cfg_encode_escape_forward_slash },
+        { "encode_skip_unsupported_value_types", json_cfg_encode_skip_unsupported_value_types },
         */
         { "new", lua_cjson_new },
         { NULL, NULL }
