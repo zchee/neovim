@@ -55,3 +55,5 @@ TREESITTER_PYTHON_URL https://github.com/tree-sitter/tree-sitter-python/archive/
 TREESITTER_BASH_URL https://github.com/tree-sitter/tree-sitter-bash/archive/master.tar.gz
 TREESITTER_MARKDOWN_URL https://github.com/MDeiml/tree-sitter-markdown/archive/split_parser.tar.gz
 TREESITTER_URL https://github.com/tree-sitter/tree-sitter/archive/master.tar.gz
+
+HOARD_URL https://github.com/zchee/Hoard/archive/dev.tar.gz

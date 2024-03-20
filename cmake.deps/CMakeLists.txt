@@ -44,6 +44,7 @@ else()
   option(USE_BUNDLED_GETTEXT "Use the bundled version of gettext." OFF)
   option(USE_BUNDLED_LIBICONV "Use the bundled version of libiconv." OFF)
 endif()
+option(USE_BUNDLED_HOARD "Use the bundled Hoard." ${USE_BUNDLED})
 
 option(USE_EXISTING_SRC_DIR "Skip download of deps sources in case of existing source directory." OFF)
 
@@ -168,4 +169,8 @@ if(WIN32)
 
   GetBinaryDep(TARGET win32yank_X86_64
     INSTALL_COMMAND ${CMAKE_COMMAND} -E copy win32yank.exe ${DEPS_BIN_DIR})
+endif()
+
+if(USE_BUNDLED_HOARD)
+  include(BuildHoard)
 endif()

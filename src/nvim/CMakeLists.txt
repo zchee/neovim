@@ -71,6 +71,9 @@ else()
   endif()
 endif()
 
+find_package(Hoard REQUIRED)
+target_link_libraries(main_lib INTERFACE ${HOARD_LIBRARY})
+
 #-------------------------------------------------------------------------------
 # Compiler and linker options
 #-------------------------------------------------------------------------------

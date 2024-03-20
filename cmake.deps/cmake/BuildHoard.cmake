@@ -1,0 +1,9 @@
+ExternalProject_Add(hoard
+  URL ${HOARD_URL}
+  DOWNLOAD_NO_PROGRESS TRUE
+  DOWNLOAD_DIR ${DEPS_DOWNLOAD_DIR}/hoard
+  CONFIGURE_COMMAND ""
+  BUILD_IN_SOURCE 1
+  BUILD_COMMAND cd ${DEPS_BUILD_DIR}/src/hoard/src && ${MAKE_PRG} Darwin-gcc-i386-static
+  INSTALL_COMMAND mv ${DEPS_BUILD_DIR}/src/hoard/src/libhoard.a ${DEPS_INSTALL_DIR}/lib
+  ${EXTERNALPROJECT_OPTIONS})
