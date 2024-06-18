@@ -54,6 +54,10 @@ check_function_exists(strcasecmp HAVE_STRCASECMP)
 check_function_exists(strncasecmp HAVE_STRNCASECMP)
 check_function_exists(strptime HAVE_STRPTIME)
 
+if(MIMALLOC_FOUND)
+  set(ENABLE_MIMALLOC 1)
+endif()
+
 check_c_source_compiles("
 #include <sys/types.h>
 #include <dirent.h>

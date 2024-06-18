@@ -45,6 +45,8 @@ else()
   option(USE_BUNDLED_LIBICONV "Use the bundled version of libiconv." OFF)
 endif()
 
+option(USE_BUNDLED_MIMALLOC "Use the bundled mimalloc." ${USE_BUNDLED})
+
 option(USE_EXISTING_SRC_DIR "Skip download of deps sources in case of existing source directory." OFF)
 
 set_default_buildtype(Release)
@@ -138,6 +140,10 @@ endif()
 
 if(USE_BUNDLED_TS)
   include(BuildTreesitter)
+endif()
+
+if(USE_BUNDLED_MIMALLOC)
+  include(BuildMiMalloc)
 endif()
 
 if(WIN32)

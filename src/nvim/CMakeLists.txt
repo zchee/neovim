@@ -50,6 +50,15 @@ if(ENABLE_LIBINTL)
   target_link_libraries(main_lib INTERFACE libintl)
 endif()
 
+option(ENABLE_MIMALLOC "enable mimalloc" ON)
+if(ENABLE_MIMALLOC)
+  find_package(MiMalloc REQUIRED)
+  target_include_directories(main_lib SYSTEM BEFORE INTERFACE ${MIMALLOC_INCLUDE_DIR})
+  target_include_directories(nlua0 SYSTEM BEFORE PUBLIC ${MIMALLOC_INCLUDE_DIR})
+  target_link_libraries(main_lib INTERFACE ${MIMALLOC_LIBRARY})
+  target_link_libraries(nlua0 PUBLIC ${MIMALLOC_LIBRARY})
+endif()
+
 target_compile_definitions(main_lib INTERFACE HAVE_UNIBILIUM)
 
 # The unit test lib requires LuaJIT; it will be skipped if LuaJIT is missing.

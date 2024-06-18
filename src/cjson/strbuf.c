@@ -27,6 +27,8 @@
 #include <stdarg.h>
 #include <string.h>
 
+#include <mimalloc.h>
+
 #include "strbuf.h"
 
 static void die(const char *fmt, ...)
@@ -58,7 +60,7 @@ extern void strbuf_init(strbuf_t *s, size_t len)
     s->reallocs = 0;
     s->debug = 0;
 
-    s->buf = malloc(size);
+    s->buf = mi_malloc(size);
     if (!s->buf)
         die("Out of memory");
 
@@ -69,7 +71,7 @@ strbuf_t *strbuf_new(size_t len)
 {
     strbuf_t *s;
 
-    s = malloc(sizeof(strbuf_t));
+    s = mi_malloc(sizeof(strbuf_t));
     if (!s)
         die("Out of memory");
 
@@ -96,11 +98,11 @@ void strbuf_free(strbuf_t *s)
     debug_stats(s);
 
     if (s->buf) {
-        free(s->buf);
+        mi_free(s->buf);
         s->buf = NULL;
     }
     if (s->dynamic)
-        free(s);
+        mi_free(s);
 }
 
 char *strbuf_free_to_string(strbuf_t *s, size_t *len)
@@ -116,7 +118,7 @@ char *strbuf_free_to_string(strbuf_t *s, size_t *len)
         *len = s->length;
 
     if (s->dynamic)
-        free(s);
+        mi_free(s);
 
     return buf;
 }
@@ -168,7 +170,7 @@ void strbuf_resize(strbuf_t *s, size_t len)
     }
 
     s->size = newsize;
-    s->buf = realloc(s->buf, s->size);
+    s->buf = mi_realloc(s->buf, s->size);
     if (!s->buf)
         die("Out of memory, len: %zu", len);
     s->reallocs++;

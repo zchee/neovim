@@ -227,6 +227,15 @@ if(LUAC_PRG)
   message(STATUS "Using Lua compiler: ${LUAC_PRG}")
 endif()
 
+option(ENABLE_MIMALLOC "enable mimalloc" ON)
+if(ENABLE_MIMALLOC)
+  if(CLANG_ASAN_UBSAN OR CLANG_MSAN OR CLANG_TSAN)
+    message(STATUS "Sanitizers enabled; disabling mimalloc")
+  else()
+    find_package(MiMalloc REQUIRED)
+  endif()
+endif()
+
 # Lint
 option(CI_LINT "Abort if lint programs not found" OFF)
 if(CI_LINT)

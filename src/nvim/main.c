@@ -258,6 +258,48 @@ int main(int argc, char **argv)
   }
 #endif
 
+  // mi_option_show_errors from 0 to 0
+  // mi_option_show_stats from 0 to 0
+  // mi_option_verbose from 0 to 0
+  // mi_option_eager_commit from 1 to 1
+  // mi_option_eager_region_commit from 0 to 0
+  // mi_option_reset_decommits from 0 to 1 <<< set to 1
+  // mi_option_large_os_pages from 0 to 0
+  // mi_option_reserve_huge_os_pages from 0 to 0
+  // mi_option_reserve_huge_os_pages_at from -1 to -1
+  // mi_option_reserve_os_memory from 0 to 0
+  // mi_option_segment_cache from 0 to 0
+  // mi_option_page_reset from 0 to 1 <<< set to 1
+  // mi_option_.abandoned_page_reset from 0 to 0
+  // mi_option_segment_reset from 0 to 0
+  // mi_option_eager_commit_delay from 4 to 4
+  // mi_option_allow_decommit from 1 to 1
+  // mi_option_reset_delay from 25 to 25
+  // mi_option_segment_decommit_delay from 500 to 500
+  // mi_option_use_numa_nodes from 0 to 0
+  // mi_option_limit_os_alloc from 0 to 0
+  // mi_option_os_tag from 100 to 100
+  // mi_option_max_errors from 16 to 16
+  // mi_option_max_warnings from 16 to 16
+
+  #include <mimalloc.h>
+  // { 0, UNINIT, MI_OPTION_LEGACY(allow_large_os_pages,large_os_pages) },    // use large OS pages, use only with eager commit to prevent fragmentation of VMA's
+  // { 0, UNINIT, MI_OPTION(reserve_huge_os_pages) },      // per 1GiB huge pages
+  // { 0, UNINIT, MI_OPTION(reserve_os_memory)     },
+  // mi_option_enable(mi_option_allow_large_os_pages);
+  // mi_option_enable(mi_option_reserve_os_memory);
+  mi_option_enable(mi_option_reserve_huge_os_pages);
+  // mi_option_enable(mi_option_eager_commit);              // default
+  // mi_option_enable(mi_option_eager_commit);              // default
+  // mi_option_set(mi_option_arena_eager_commit, 4);        // default: 2
+  // mi_option_enable(mi_option_purge_decommits);           // default
+  // mi_option_enable(mi_option_allow_large_os_pages);      // default: disable
+  // mi_option_set(mi_option_reserve_huge_os_pages, 1);     // default: 1
+  // mi_option_set(mi_option_arena_reserve, 512L * 1024L);  // default: 128L * 1024L, 1024L * 1024L
+  // mi_option_set(mi_option_purge_delay, 10);              // default: 10
+  // mi_option_set(mi_option_arena_purge_mult, 10);         // default: 10
+  // mi_option_disable(mi_option_purge_extend_delay);       // default
+
   argv0 = argv[0];
 
   if (!appname_is_valid()) {
