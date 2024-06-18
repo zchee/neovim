@@ -45,16 +45,31 @@
 #include "nvim/usercmd.h"
 #include "nvim/vim_defs.h"
 
-#ifdef UNIT_TESTING
-# define malloc(size) mem_malloc(size)
-# define calloc(count, size) mem_calloc(count, size)
-# define realloc(ptr, size) mem_realloc(ptr, size)
-# define free(ptr) mem_free(ptr)
-MemMalloc mem_malloc = &malloc;
-MemFree mem_free = &free;
-MemCalloc mem_calloc = &calloc;
-MemRealloc mem_realloc = &realloc;
-#endif
+#include <mimalloc.h>
+// #define malloc(size) mi_malloc(size)
+// #define calloc(count, size) mi_calloc(count, size)
+// #define realloc(ptr, size) mi_realloc(ptr, size)
+// #define free(ptr) mi_free(ptr)
+MemMalloc mem_malloc = &mi_malloc;
+MemFree mem_free = &mi_free;
+MemCalloc mem_calloc = &mi_calloc;
+MemRealloc mem_realloc = &mi_realloc;
+
+// #ifdef UNIT_TESTING
+// # define malloc(size) mem_malloc(size)
+// # define calloc(count, size) mem_calloc(count, size)
+// # define realloc(ptr, size) mem_realloc(ptr, size)
+// # define free(ptr) mem_free(ptr)
+// MemMalloc mem_malloc = &mi_malloc;
+// MemFree mem_free = &mi_free;
+// MemCalloc mem_calloc = &mi_calloc;
+// MemRealloc mem_realloc = &mi_realloc;
+// #else
+// # define malloc(size) mi_malloc(size)
+// # define calloc(count, size) mi_calloc(count, size)
+// # define realloc(ptr, size) mi_realloc(ptr, size)
+// # define free(ptr) mi_free(ptr)
+// #endif
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "memory.c.generated.h"
@@ -96,10 +111,10 @@ void try_to_free_memory(void)
 void *try_malloc(size_t size) FUNC_ATTR_MALLOC FUNC_ATTR_ALLOC_SIZE(1)
 {
   size_t allocated_size = size ? size : 1;
-  void *ret = malloc(allocated_size);
+  void *ret = mi_malloc(allocated_size);
   if (!ret) {
     try_to_free_memory();
-    ret = malloc(allocated_size);
+    ret = mi_malloc(allocated_size);
   }
   return ret;
 }
@@ -142,7 +157,7 @@ void *xmalloc(size_t size)
 /// @note Use XFREE_CLEAR() instead, if possible.
 void xfree(void *ptr)
 {
-  free(ptr);
+  mi_free(ptr);
 }
 
 /// calloc() wrapper
@@ -156,10 +171,10 @@ void *xcalloc(size_t count, size_t size)
 {
   size_t allocated_count = count && size ? count : 1;
   size_t allocated_size = count && size ? size : 1;
-  void *ret = calloc(allocated_count, allocated_size);
+  void *ret = mi_calloc(allocated_count, allocated_size);
   if (!ret) {
     try_to_free_memory();
-    ret = calloc(allocated_count, allocated_size);
+    ret = mi_calloc(allocated_count, allocated_size);
     if (!ret) {
       preserve_exit(e_outofmem);
     }
@@ -176,10 +191,10 @@ void *xrealloc(void *ptr, size_t size)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_ALLOC_SIZE(2) FUNC_ATTR_NONNULL_RET
 {
   size_t allocated_size = size ? size : 1;
-  void *ret = realloc(ptr, allocated_size);
+  void *ret = mi_realloc(ptr, allocated_size);
   if (!ret) {
     try_to_free_memory();
-    ret = realloc(ptr, allocated_size);
+    ret = mi_realloc(ptr, allocated_size);
     if (!ret) {
       preserve_exit(e_outofmem);
     }

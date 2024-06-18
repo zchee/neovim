@@ -126,6 +126,7 @@ else()
 endif()
 option(ENABLE_LIBINTL "enable libintl" ON)
 option(ENABLE_WASMTIME "enable wasmtime" OFF)
+option(ENABLE_MIMALLOC "enable mimalloc" ON)
 
 message(STATUS "CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}")
 

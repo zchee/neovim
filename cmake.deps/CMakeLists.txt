@@ -58,6 +58,8 @@ if(NOT ENABLE_WASMTIME AND USE_BUNDLED_WASMTIME)
   You need set ENABLE_WASMTIME to ON if you want to use wasmtime.")
 endif()
 
+option(USE_BUNDLED_MIMALLOC "Use the bundled mimalloc." ${USE_BUNDLED})
+
 option(USE_EXISTING_SRC_DIR "Skip download of deps sources in case of existing source directory." OFF)
 
 set_default_buildtype(Release)
@@ -151,6 +153,10 @@ endif()
 
 if(USE_BUNDLED_UTF8PROC)
   include(BuildUTF8proc)
+endif()
+
+if(USE_BUNDLED_MIMALLOC)
+  include(BuildMiMalloc)
 endif()
 
 if(WIN32)

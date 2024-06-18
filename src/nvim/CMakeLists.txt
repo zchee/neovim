@@ -54,6 +54,18 @@ if(ENABLE_WASMTIME)
   target_compile_definitions(nvim_bin PRIVATE HAVE_WASMTIME)
 endif()
 
+if(ENABLE_MIMALLOC)
+  if (ENABLE_ASAN_UBSAN OR ENABLE_MSAN OR ENABLE_TSAN)
+    message(STATUS "Sanitizers enabled; disabling mimalloc")
+  else()
+    find_package(MiMalloc REQUIRED)
+    target_include_directories(main_lib SYSTEM BEFORE INTERFACE ${MIMALLOC_INCLUDE_DIR})
+    target_include_directories(nlua0 SYSTEM BEFORE PUBLIC ${MIMALLOC_INCLUDE_DIR})
+    target_link_libraries(main_lib INTERFACE ${MIMALLOC_LIBRARY})
+    target_link_libraries(nlua0 PUBLIC ${MIMALLOC_LIBRARY})
+  endif()
+endif()
+
 # The unit test lib requires LuaJIT; it will be skipped if LuaJIT is missing.
 option(PREFER_LUA "Prefer Lua over LuaJIT in the nvim executable." OFF)
 if(PREFER_LUA)

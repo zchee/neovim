@@ -24,6 +24,8 @@
 #include <lua.h>
 #include <luaconf.h>
 
+#include <mimalloc.h>
+
 #include "nvim/macros_defs.h"
 
 #include "lmpack.h"
@@ -136,11 +138,11 @@ static mpack_parser_t *lmpack_grow_parser(mpack_parser_t *parser)
 {
   mpack_parser_t *old = parser;
   mpack_uint32_t new_capacity = old->capacity * 2;
-  parser = malloc(MPACK_PARSER_STRUCT_SIZE(new_capacity));
+  parser = mi_malloc(MPACK_PARSER_STRUCT_SIZE(new_capacity));
   if (!parser) goto end;
   mpack_parser_init(parser, new_capacity);
   mpack_parser_copy(parser, old);
-  free(old);
+  mi_free(old);
 end:
   return parser;
 }
@@ -149,11 +151,11 @@ static mpack_rpc_session_t *lmpack_grow_session(mpack_rpc_session_t *session)
 {
   mpack_rpc_session_t *old = session;
   mpack_uint32_t new_capacity = old->capacity * 2;
-  session = malloc(MPACK_RPC_SESSION_STRUCT_SIZE(new_capacity));
+  session = mi_malloc(MPACK_RPC_SESSION_STRUCT_SIZE(new_capacity));
   if (!session) goto end;
   mpack_rpc_session_init(session, new_capacity);
   mpack_rpc_session_copy(session, old);
-  free(old);
+  mi_free(old);
 end:
   return session;
 }
@@ -258,7 +260,7 @@ static int lmpack_unpacker_new(lua_State *L)
     return luaL_error(L, "expecting at most 1 table argument"); 
 
   rv = lua_newuserdata(L, sizeof(*rv));
-  rv->parser = malloc(sizeof(*rv->parser));
+  rv->parser = mi_malloc(sizeof(*rv->parser));
   if (!rv->parser) return luaL_error(L, "Failed to allocate memory");
   mpack_parser_init(rv->parser, 0);
   rv->parser->data.p = rv;
@@ -299,7 +301,7 @@ static int lmpack_unpacker_delete(lua_State *L)
 #ifndef MPACK_DEBUG_REGISTRY_LEAK
   luaL_unref(L, LUA_REGISTRYINDEX, unpacker->reg);
 #endif
-  free(unpacker->parser);
+  mi_free(unpacker->parser);
   return 0;
 }
 
@@ -325,7 +327,7 @@ static void lmpack_parse_enter(mpack_parser_t *parser, mpack_node_t *node)
     case MPACK_TOKEN_BIN:
     case MPACK_TOKEN_STR:
     case MPACK_TOKEN_EXT:
-      unpacker->string_buffer = malloc(node->tok.length);
+      unpacker->string_buffer = mi_malloc(node->tok.length);
       if (!unpacker->string_buffer) luaL_error(L, "Failed to allocate memory");
       break;
     case MPACK_TOKEN_ARRAY:
@@ -347,7 +349,7 @@ static void lmpack_parse_exit(mpack_parser_t *parser, mpack_node_t *node)
     case MPACK_TOKEN_STR:
     case MPACK_TOKEN_EXT:
       lua_pushlstring(L, unpacker->string_buffer, node->tok.length);
-      free(unpacker->string_buffer);
+      mi_free(unpacker->string_buffer);
       unpacker->string_buffer = NULL;
       if (node->tok.type == MPACK_TOKEN_EXT && unpacker->ext != LUA_NOREF) {
         /* check if there's a handler for this type */
@@ -502,7 +504,7 @@ static int lmpack_packer_new(lua_State *L)
     return luaL_error(L, "expecting at most 1 table argument"); 
 
   rv = lua_newuserdata(L, sizeof(*rv));
-  rv->parser = malloc(sizeof(*rv->parser));
+  rv->parser = mi_malloc(sizeof(*rv->parser));
   if (!rv->parser) return luaL_error(L, "failed to allocate parser memory");
   mpack_parser_init(rv->parser, 0);
   rv->parser->data.p = rv;
@@ -556,7 +558,7 @@ static int lmpack_packer_delete(lua_State *L)
 #ifndef MPACK_DEBUG_REGISTRY_LEAK
   luaL_unref(L, LUA_REGISTRYINDEX, packer->reg);
 #endif
-  free(packer->parser);
+  mi_free(packer->parser);
   return 0;
 }
 
@@ -820,7 +822,7 @@ static int lmpack_packer_pack(lua_State *L)
 static int lmpack_session_new(lua_State *L)
 {
   Session *rv = lua_newuserdata(L, sizeof(*rv));
-  rv->session = malloc(sizeof(*rv->session));
+  rv->session = mi_malloc(sizeof(*rv->session));
   if (!rv->session) return luaL_error(L, "Failed to allocate memory");
   mpack_rpc_session_init(rv->session, 0);
   rv->L = L;
@@ -855,7 +857,7 @@ static int lmpack_session_delete(lua_State *L)
 #ifndef MPACK_DEBUG_REGISTRY_LEAK
   luaL_unref(L, LUA_REGISTRYINDEX, session->reg);
 #endif
-  free(session->session);
+  mi_free(session->session);
   return 0;
 }
 
