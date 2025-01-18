@@ -434,10 +434,10 @@ function M.apply_text_document_edit(text_document_edit, index, position_encoding
   local text_document = text_document_edit.textDocument
   local bufnr = vim.uri_to_bufnr(text_document.uri)
   if position_encoding == nil then
-    vim.notify_once(
-      'apply_text_document_edit must be called with valid position encoding',
-      vim.log.levels.WARN
-    )
+    -- vim.notify_once(
+    --   'apply_text_document_edit must be called with valid position encoding',
+    --   vim.log.levels.WARN
+    -- )
     return
   end
 
@@ -621,10 +621,10 @@ end
 ---@see https://microsoft.github.io/language-server-protocol/specifications/specification-current/#workspace_applyEdit
 function M.apply_workspace_edit(workspace_edit, position_encoding)
   if position_encoding == nil then
-    vim.notify_once(
-      'apply_workspace_edit must be called with valid position encoding',
-      vim.log.levels.WARN
-    )
+    -- vim.notify_once(
+    --   'apply_workspace_edit must be called with valid position encoding',
+    --   vim.log.levels.WARN
+    -- )
     return
   end
   if workspace_edit.documentChanges then
@@ -912,10 +912,10 @@ function M.show_document(location, position_encoding, opts)
     return false
   end
   if position_encoding == nil then
-    vim.notify_once(
-      'show_document must be called with valid position encoding',
-      vim.log.levels.WARN
-    )
+    -- vim.notify_once(
+    --   'show_document must be called with valid position encoding',
+    --   vim.log.levels.WARN
+    -- )
     return false
   end
   local bufnr = vim.uri_to_bufnr(uri)
@@ -1712,10 +1712,10 @@ end)
 ---@return vim.quickfix.entry[] # See |setqflist()| for the format
 function M.locations_to_items(locations, position_encoding)
   if position_encoding == nil then
-    vim.notify_once(
-      'locations_to_items must be called with valid position encoding',
-      vim.log.levels.WARN
-    )
+    -- vim.notify_once(
+    --   'locations_to_items must be called with valid position encoding',
+    --   vim.log.levels.WARN
+    -- )
     position_encoding = vim.lsp.get_clients({ bufnr = 0 })[1].offset_encoding
   end
 
@@ -1976,10 +1976,10 @@ function M.make_given_range_params(start_pos, end_pos, bufnr, position_encoding)
   validate('position_encoding', position_encoding, 'string', true)
   bufnr = vim._resolve_bufnr(bufnr)
   if position_encoding == nil then
-    vim.notify_once(
-      'position_encoding param is required in vim.lsp.util.make_given_range_params. Defaulting to position encoding of the first client.',
-      vim.log.levels.WARN
-    )
+    -- vim.notify_once(
+    --   'position_encoding param is required in vim.lsp.util.make_given_range_params. Defaulting to position encoding of the first client.',
+    --   vim.log.levels.WARN
+    -- )
     position_encoding = M._get_offset_encoding(bufnr)
   end
   --- @type [integer, integer]
@@ -2067,13 +2067,13 @@ end
 ---@return integer `offset_encoding` index of the character in line {row} column {col} in buffer {buf}
 function M.character_offset(buf, row, col, offset_encoding)
   local line = get_line(buf, row)
-  -- if offset_encoding == nil then
-  --   vim.notify_once(
-  --     'character_offset must be called with valid offset encoding',
-  --     vim.log.levels.WARN
-  --   )
-  --   offset_encoding = vim.lsp.get_clients({ bufnr = buf })[1].offset_encoding
-  -- end
+  if offset_encoding == nil then
+    -- vim.notify_once(
+    --   'character_offset must be called with valid offset encoding',
+    --   vim.log.levels.WARN
+    -- )
+    offset_encoding = vim.lsp.get_clients({ bufnr = buf })[1].offset_encoding
+  end
   offset_encoding = vim.lsp.get_clients({ bufnr = buf })[1].offset_encoding
   return vim.str_utfindex(line, offset_encoding, col, false)
 end
