@@ -1891,10 +1891,10 @@ function M.make_position_params(window, position_encoding)
   window = window or 0
   local buf = api.nvim_win_get_buf(window)
   if position_encoding == nil then
-    vim.notify_once(
-      'position_encoding param is required in vim.lsp.util.make_position_params. Defaulting to position encoding of the first client.',
-      vim.log.levels.WARN
-    )
+    -- vim.notify_once(
+    --   'position_encoding param is required in vim.lsp.util.make_position_params. Defaulting to position encoding of the first client.',
+    --   vim.log.levels.WARN
+    -- )
     position_encoding = M._get_offset_encoding(buf)
   end
   return {
@@ -1926,10 +1926,10 @@ function M._get_offset_encoding(bufnr)
     if not offset_encoding then
       offset_encoding = this_offset_encoding
     elseif offset_encoding ~= this_offset_encoding then
-      vim.notify_once(
-        'warning: multiple different client offset_encodings detected for buffer, vim.lsp.util._get_offset_encoding() uses the offset_encoding from the first client',
-        vim.log.levels.WARN
-      )
+      -- vim.notify_once(
+      --   'warning: multiple different client offset_encodings detected for buffer, vim.lsp.util._get_offset_encoding() uses the offset_encoding from the first client',
+      --   vim.log.levels.WARN
+      -- )
     end
   end
 
@@ -1947,10 +1947,10 @@ end
 function M.make_range_params(window, position_encoding)
   local buf = api.nvim_win_get_buf(window or 0)
   if position_encoding == nil then
-    vim.notify_once(
-      'position_encoding param is required in vim.lsp.util.make_range_params. Defaulting to position encoding of the first client.',
-      vim.log.levels.WARN
-    )
+    -- vim.notify_once(
+    --   'position_encoding param is required in vim.lsp.util.make_range_params. Defaulting to position encoding of the first client.',
+    --   vim.log.levels.WARN
+    -- )
     position_encoding = M._get_offset_encoding(buf)
   end
   local position = make_position_param(window, position_encoding)
@@ -2067,13 +2067,14 @@ end
 ---@return integer `offset_encoding` index of the character in line {row} column {col} in buffer {buf}
 function M.character_offset(buf, row, col, offset_encoding)
   local line = get_line(buf, row)
-  if offset_encoding == nil then
-    vim.notify_once(
-      'character_offset must be called with valid offset encoding',
-      vim.log.levels.WARN
-    )
-    offset_encoding = vim.lsp.get_clients({ bufnr = buf })[1].offset_encoding
-  end
+  -- if offset_encoding == nil then
+  --   vim.notify_once(
+  --     'character_offset must be called with valid offset encoding',
+  --     vim.log.levels.WARN
+  --   )
+  --   offset_encoding = vim.lsp.get_clients({ bufnr = buf })[1].offset_encoding
+  -- end
+  offset_encoding = vim.lsp.get_clients({ bufnr = buf })[1].offset_encoding
   return vim.str_utfindex(line, offset_encoding, col, false)
 end
 
