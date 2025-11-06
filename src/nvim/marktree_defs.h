@@ -99,4 +99,5 @@ typedef struct {
   uint32_t meta_root[kMTMetaCount];
   size_t n_keys, n_nodes;
   PMap(uint64_t) id2node[1];
+  Map(int64_t, int64_t) byte_cache[1];
 } MarkTree;

@@ -646,3 +646,72 @@ describe('marktree', function()
     eq(tablelength(seen), tablelength(shadow))
   end)
 end)
+
+describe('marktree byte cache', function()
+  local function lookup(tree, line)
+    local out = ffi.new('bcount_t[1]')
+    local ok_lookup = lib.marktree_bytecache_lookup(tree, line, out)
+    if not ok_lookup then
+      return false
+    end
+    return true, tonumber(out[0])
+  end
+
+  it('stores and retrieves offsets', function()
+    local tree = ffi.new('MarkTree[1]')
+    eq(false, select(1, lookup(tree, 3)))
+
+    lib.marktree_bytecache_store(tree, 3, 42)
+    local ok_lookup, value = lookup(tree, 3)
+    eq(true, ok_lookup)
+    eq(42, value)
+  end)
+
+  it('adjusts single-line edits without invalidating cached line', function()
+    local tree = ffi.new('MarkTree[1]')
+    lib.marktree_bytecache_store(tree, 0, 0)
+    lib.marktree_bytecache_store(tree, 1, 5)
+    lib.marktree_bytecache_store(tree, 3, 15)
+
+    -- Edit inside line 1 adding two bytes.
+    lib.marktree_bytecache_apply_splice(tree, 1, 0, 0, 3, 5)
+
+    local _, v1 = lookup(tree, 1)
+    eq(5, v1)
+    local _, v3 = lookup(tree, 3)
+    eq(17, v3)
+  end)
+
+  it('drops cached entries inside deleted regions and shifts following lines', function()
+    local tree = ffi.new('MarkTree[1]')
+    lib.marktree_bytecache_store(tree, 0, 0)
+    lib.marktree_bytecache_store(tree, 1, 4)
+    lib.marktree_bytecache_store(tree, 2, 9)
+    lib.marktree_bytecache_store(tree, 4, 30)
+
+    -- Delete one line starting at start_row=1 removing 10 bytes.
+    lib.marktree_bytecache_apply_splice(tree, 1, 1, 0, 10, 0)
+
+    eq(false, select(1, lookup(tree, 1)))
+    eq(false, select(1, lookup(tree, 2)))
+
+    local ok_lookup, shifted = lookup(tree, 3)
+    eq(true, ok_lookup)
+    eq(20, shifted)
+  end)
+
+  it('reindexes cached entries after inserting lines', function()
+    local tree = ffi.new('MarkTree[1]')
+    lib.marktree_bytecache_store(tree, 0, 0)
+    lib.marktree_bytecache_store(tree, 2, 12)
+    lib.marktree_bytecache_store(tree, 5, 40)
+
+    -- Insert two lines (new_row = 2) adding 15 bytes.
+    lib.marktree_bytecache_apply_splice(tree, 2, 0, 2, 0, 15)
+
+    local ok_lookup, new_value = lookup(tree, 7)
+    eq(true, ok_lookup)
+    eq(55, new_value)
+    eq(false, select(1, lookup(tree, 5)))
+  end)
+end)

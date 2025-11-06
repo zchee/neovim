@@ -530,20 +530,31 @@ void extmark_splice(buf_T *buf, int start_row, colnr_T start_col, int old_row, c
                     bcount_t old_byte, int new_row, colnr_T new_col, bcount_t new_byte,
                     ExtmarkOp undo)
 {
-  int offset = ml_find_line_or_offset(buf, start_row + 1, NULL, true);
+  bcount_t start_byte = 0;
+  bool cached = marktree_bytecache_lookup(buf->b_marktree, start_row, &start_byte);
+  if (!cached) {
+    start_byte = ml_find_line_or_offset(buf, start_row + 1, NULL, true);
 
-  // On empty buffers, when editing the first line, the line is buffered,
-  // causing offset to be < 0. While the buffer is not actually empty, the
-  // buffered line has not been flushed (and should not be) yet, so the call is
-  // valid but an edge case.
-  //
-  // TODO(vigoux): maybe the is a better way of testing that ?
-  if (offset < 0 && buf->b_ml.ml_chunksize == NULL) {
-    offset = 0;
+    // On empty buffers, when editing the first line, the line is buffered,
+    // causing offset to be < 0. While the buffer is not actually empty, the
+    // buffered line has not been flushed (and should not be) yet, so the call is
+    // valid but an edge case.
+    //
+    // TODO(vigoux): maybe there is a better way of testing that ?
+    if (start_byte < 0 && buf->b_ml.ml_chunksize == NULL) {
+      start_byte = 0;
+    }
+    if (start_byte >= 0) {
+      marktree_bytecache_store(buf->b_marktree, start_row, start_byte);
+    }
   }
-  extmark_splice_impl(buf, start_row, start_col, offset + start_col,
+
+  extmark_splice_impl(buf, start_row, start_col, start_byte + start_col,
                       old_row, old_col, old_byte, new_row, new_col, new_byte,
                       undo);
+
+  marktree_bytecache_apply_splice(buf->b_marktree, start_row, old_row, new_row,
+                                  old_byte, new_byte);
 }
 
 void extmark_splice_impl(buf_T *buf, int start_row, colnr_T start_col, bcount_t start_byte,
