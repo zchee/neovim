@@ -345,14 +345,29 @@ typedef TV_DICTITEM_STRUCT(sizeof("changedtick")) ChangedtickDictItem;
 typedef struct {
   LuaRef on_lines;
   LuaRef on_bytes;
+  LuaRef on_bytes_batch;
   LuaRef on_changedtick;
   LuaRef on_detach;
   LuaRef on_reload;
   bool utf_sizes;
   bool preview;
 } BufUpdateCallbacks;
-#define BUF_UPDATE_CALLBACKS_INIT { LUA_NOREF, LUA_NOREF, LUA_NOREF, \
+#define BUF_UPDATE_CALLBACKS_INIT { LUA_NOREF, LUA_NOREF, LUA_NOREF, LUA_NOREF, \
                                     LUA_NOREF, LUA_NOREF, false, false }
+
+typedef struct {
+  varnumber_T changedtick;
+  int start_row;
+  colnr_T start_col;
+  bcount_t start_byte;
+  int old_row;
+  colnr_T old_col;
+  bcount_t old_byte;
+  int new_row;
+  colnr_T new_col;
+  bcount_t new_byte;
+  bool cmdpreview;
+} BufQueuedByteEvent;
 
 #define BUF_HAS_QF_ENTRY 1
 #define BUF_HAS_LL_ENTRY 2
@@ -751,6 +766,12 @@ struct file_buffer {
   kvec_t(uint64_t) update_channels;
   // array of lua callbacks for buffer updates.
   kvec_t(BufUpdateCallbacks) update_callbacks;
+  // queued byte-oriented updates for batch-aware callbacks.
+  kvec_t(BufQueuedByteEvent) queued_byte_updates;
+  // whether a flush event is scheduled for queued updates.
+  bool queued_byte_updates_scheduled;
+  // number of callbacks requesting batched byte updates.
+  size_t update_bytes_batch_count;
 
   // whether an update callback has requested codepoint size of deleted regions.
   bool update_need_codepoints;

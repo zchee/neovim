@@ -204,7 +204,7 @@ function State:new(bufnr)
       end
     end,
     --- Sync changed rows with their previous foldlevels before applying new ones.
-    on_bytes = function(_, _, _, start_row, _, _, old_row, _, _, new_row, _, _)
+    on_bytes_batch = function(_, _, events)
       local state = State.active[bufnr]
       if state == nil then
         return true
@@ -213,18 +213,21 @@ function State:new(bufnr)
       if next(row_level) == nil then
         return
       end
-      local row = new_row - old_row
-      if row > 0 then
-        vim._list_insert(row_level, start_row, start_row + math.abs(row) - 1, { -1 })
-        -- If the previous row ends a fold,
-        -- Nvim treats the first row after consecutive `-1`s as a new fold start,
-        -- which is not the desired behavior.
-        local prev_level = row_level[start_row - 1]
-        if prev_level and prev_level[2] == '<' then
-          row_level[start_row] = { prev_level[1] - 1 }
+      for _, ev in ipairs(events or {}) do
+        local row = ev.new_row - ev.old_row
+        local start_row = ev.start_row
+        if row > 0 then
+          vim._list_insert(row_level, start_row, start_row + math.abs(row) - 1, { -1 })
+          -- If the previous row ends a fold,
+          -- Nvim treats the first row after consecutive `-1`s as a new fold start,
+          -- which is not the desired behavior.
+          local prev_level = row_level[start_row - 1]
+          if prev_level and prev_level[2] == '<' then
+            row_level[start_row] = { prev_level[1] - 1 }
+          end
+        elseif row < 0 then
+          vim._list_remove(row_level, start_row, start_row + math.abs(row) - 1)
         end
-      elseif row < 0 then
-        vim._list_remove(row_level, start_row, start_row + math.abs(row) - 1)
       end
     end,
   })
