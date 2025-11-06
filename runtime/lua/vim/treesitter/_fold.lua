@@ -12,7 +12,7 @@ local api = vim.api
 ---@field levels string[] the cached foldexpr result for each line
 ---@field levels0 integer[] the cached raw fold levels
 ---
----The range edited since the last invocation of the callback scheduled in on_bytes.
+---The range edited since the last invocation of the callback scheduled in on_bytes_batch.
 ---Should compute fold levels in this range.
 ---@field on_bytes_range? Range2
 ---
@@ -409,8 +409,13 @@ function M.foldexpr(lnum)
         on_changedtree(bufnr, tree_changes)
       end,
 
-      on_bytes = function(_, _, start_row, start_col, _, old_row, old_col, _, new_row, new_col, _)
-        on_bytes(bufnr, start_row, start_col, old_row, old_col, new_row, new_col)
+      on_bytes_batch = function(_, _, events)
+        if not events then
+          return
+        end
+        for _, ev in ipairs(events) do
+          on_bytes(bufnr, ev.start_row, ev.start_col, ev.old_row, ev.old_col, ev.new_row, ev.new_col)
+        end
       end,
 
       on_detach = function()

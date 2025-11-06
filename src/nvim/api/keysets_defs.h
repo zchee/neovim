@@ -374,6 +374,9 @@ typedef struct {
             Integer new_end_row,
             Integer new_end_col,
             Integer new_end_byte), *Boolean) on_bytes;
+  LuaRefOf(("bytes" _,
+            Integer bufnr,
+            Array events), *Boolean) on_bytes_batch;
   LuaRefOf(("changedtick" _, Integer bufnr, Integer changedtick)) on_changedtick;
   LuaRefOf(("detach" _, Integer bufnr)) on_detach;
   LuaRefOf(("reload" _, Integer bufnr)) on_reload;

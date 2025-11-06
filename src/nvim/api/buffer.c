@@ -181,6 +181,11 @@ Boolean nvim_buf_attach(uint64_t channel_id, Buffer buffer, Boolean send_buffer,
       opts->on_bytes = LUA_NOREF;
     }
 
+    if (HAS_KEY(opts, buf_attach, on_bytes_batch)) {
+      cb.on_bytes_batch = opts->on_bytes_batch;
+      opts->on_bytes_batch = LUA_NOREF;
+    }
+
     if (HAS_KEY(opts, buf_attach, on_changedtick)) {
       cb.on_changedtick = opts->on_changedtick;
       opts->on_changedtick = LUA_NOREF;
