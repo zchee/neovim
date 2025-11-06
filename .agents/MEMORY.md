@@ -1,19 +1,18 @@
 # Knowledge
-- Implemented terminfo sequence caching in `src/nvim/tui/tui.c`, reducing repeated `terminfo_fmt` calls for zero-parameter capabilities. Added helper `terminfo_is_parametric` in `src/nvim/tui/terminfo.c` with unit coverage.
-- Optimized TUI flush path to attempt `uv_try_write` before falling back to `uv_write`, avoiding unnecessary `uv_run` invocations when writes complete synchronously.
-- Unit target: `TEST_FILE=test/unit/terminfo_spec.lua make unittest`
-- Identified edit-path hotspots: repeated `ml_find_line_or_offset()` calls, synchronous buffer update callbacks, and `win_line()` recomputation dominate CPU during heavy edits or redraw storms. Proposed caching marktree leaf offsets, batching extmark notifications, and caching rendered lines to cut redraw and Lua bridge overhead.
+- Terminfo optimizations: Previously implemented caching for zero-parameter terminfo capabilities in `src/nvim/tui/tui.c` and helper `terminfo_is_parametric` in `src/nvim/tui/terminfo.c`, plus unit coverage.
+- TUI flush path: Optimized `flush_buf` to attempt `uv_try_write` before `uv_write`, avoiding needless event-loop iterations when writes complete synchronously.
+- Performance hotspots: Profiling highlighted repeated `ml_find_line_or_offset()` calls, synchronous buffer-update callbacks, and `win_line()` recomputation as dominant costs during heavy edits; proposed mitigations include marktree byte-offset caching, batched extmark notifications, and line-render caching.
+- Treesitter regressions: Functional tests such as `test/functional/lua/comment_spec.lua` fail even when the marktree byte cache is disabled. Failures show commentstring metadata not being applied (`-- print(1)` vs expected `"print(1)`), indicating an upstream issue in Treesitter comment handling (likely `vim.treesitter.get_node_text` / `_range.add_bytes` pipeline) that blocks cache reintroduction.
+- Marktree cache state: Prior attempts to reintroduce the cache exposed tricky invalidation semantics; unit tests can be satisfied but functional regressions persist until Treesitter issues are resolved.
 
 # Plan
-1. Verify new flush behaviour on macOS, Linux, and Windows consoles to ensure `uv_try_write` fallback covers all cases.
-2. Extend terminfo caching to cursor visibility helpers used in `flush_buf_start`/`flush_buf_end`.
-3. Prototype marktree leaf byte-offset caching and benchmark large-buffer edits.
-4. Add instrumentation around `ml_find_line_or_offset()` and `win_line()` to measure hit rates and validate caching impact.
-5. Design buffered event delivery for `buf_updates_send_splice()` so Lua hooks batch work instead of firing per edit.
-6. After optimizations, reprofile screen redraws and refactor `win_line()` into skip-capable stages.
+1. Diagnose Treesitter commentstring failures by instrumenting `vim.treesitter.get_node_text`, `_range.add_bytes`, and comment helpers to understand why metadata is ignored after recent batching/marktree changes.
+2. Create minimal Lua/Treesitter reproductions outside the full functional suite to iterate quickly, then patch the offending range/offset logic (likely in `_range.lua` or metadata handling) and add regression tests.
+3. Once Treesitter behavior is corrected, reapply marktree byte-cache improvements with a sound invalidation strategy, ensuring unit specs cover splices, insertions, deletions, and cache miss behavior.
+4. Validate with `TEST_FILE=test/unit/marktree_spec.lua make unittest`, targeted functional subsets (Treesitter/comment specs, buffer updates), and finally full `make unittest` and `make functionaltest-lua`.
 
 # Suggested Steps
-1. Build a marktree leaf cache prototype, then run profiling/benchmarks on large buffers to capture before/after timings.
-2. Instrument `ml_find_line_or_offset()` and `win_line()` usage inside the edit loop to capture current hot-path cost.
-3. Sketch and implement a batched buffer-update dispatcher, migrating treesitter/LSP clients to the new path.
-4. Reprofile redraw performance and restructure `win_line()` stages based on the new data.
+1. Run `TEST_FILE=test/functional/lua/comment_spec.lua make functionaltest-lua` to capture logs, instrument `runtime/lua/vim/treesitter.lua` to log ranges, and verify commentstring metadata flow.
+2. Draft a minimal reproduction (Lua snippet) invoking `vim.treesitter.query.get_node_text` with metadata to confirm failures without the entire suite.
+3. Prototype fixes in `_range.lua` / `treesitter.lua`, add unit/functional coverage for the commentstring scenarios, and rerun targeted tests.
+4. Reintroduce marktree byte-cache logic with updated tests once Treesitter regressions are resolved, followed by complete test runs and performance validation.
