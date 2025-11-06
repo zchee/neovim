@@ -140,12 +140,17 @@ struct TUIData {
   int url;  ///< Index of URL currently being printed, if any
   StringBuilder urlbuf;  ///< Re-usable buffer for writing OSC 8 control sequences
   Arena ti_arena;
+  size_t terminfo_lengths[kTermCount];
+  bool terminfo_parametric[kTermCount];
 };
 
 static bool cursor_style_enabled = false;
 #include "tui/tui.c.generated.h"
 
 #define TERMINFO_SEQ_LIMIT 128
+
+static void terminfo_cache_entry(TUIData *tui, TerminfoDef what) FUNC_ATTR_NONNULL_ALL;
+static void terminfo_cache_all(TUIData *tui) FUNC_ATTR_NONNULL_ALL;
 
 #define terminfo_print_num1(tui, what, num) terminfo_print_num(tui, what, num, 0, 0)
 #define terminfo_print_num2(tui, what, num1, num2) terminfo_print_num(tui, what, num1, num2, 0)
@@ -424,6 +429,8 @@ static void terminfo_start(TUIData *tui)
 
   patch_terminfo_bugs(tui, term, colorterm, vtev, konsolev, iterm_env, nsterm);
   augment_terminfo(tui, term, vtev, konsolev, weztermv, iterm_env, nsterm);
+
+  terminfo_cache_all(tui);
 
 #define TI_HAS(name) (tui->ti.defs[name] != NULL)
   tui->can_change_scroll_region = TI_HAS(kTerm_change_scroll_region);
@@ -1944,6 +1951,20 @@ static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params)
     return;
   }
 
+  if (!tui->terminfo_parametric[what] && tui->terminfo_lengths[what] == 0) {
+    bool needs_params = terminfo_is_parametric(str);
+    tui->terminfo_parametric[what] = needs_params;
+    if (!needs_params) {
+      tui->terminfo_lengths[what] = strlen(str);
+    }
+  }
+
+  if (!tui->terminfo_parametric[what]) {
+    size_t len = tui->terminfo_lengths[what];
+    out(tui, str, len);
+    return;
+  }
+
   if (sizeof(tui->buf) - tui->bufpos > TERMINFO_SEQ_LIMIT) {
     TPVAR copy_params[9];
     memcpy(copy_params, params, sizeof copy_params);
@@ -1962,16 +1983,87 @@ static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params)
     tui->bufpos += len;
   }
 }
+
+static size_t terminfo_copy_cached0(TUIData *tui, TerminfoDef what, char *dst, size_t len)
+  FUNC_ATTR_NONNULL_ALL
+{
+  if (len == 0 || dst == NULL) {
+    return 0;
+  }
+
+  const char *str = tui->ti.defs[what];
+  if (str == NULL || *str == NUL) {
+    return 0;
+  }
+
+  if (!tui->terminfo_parametric[what]) {
+    size_t cached_len = tui->terminfo_lengths[what];
+    if (cached_len == 0) {
+      cached_len = strlen(str);
+      tui->terminfo_lengths[what] = cached_len;
+    }
+
+    if (cached_len < len) {
+      memcpy(dst, str, cached_len);
+      return cached_len;
+    }
+    // Not enough room for the cached value, fall back to formatting below.
+  }
+
+  TPVAR null_params[9] = { 0 };
+  return terminfo_fmt(dst, dst + len, str, null_params);
+}
+
+#ifdef UNIT_TESTING
+size_t nvim_test_terminfo_copy_cached(TerminfoDef def, const char *str, bool parametric,
+                                      size_t cached_len_in, size_t *cached_len_out,
+                                      char *dst, size_t len)
+{
+  TUIData tui = { 0 };
+  tui.ti.defs[def] = (char *)str;
+  tui.terminfo_parametric[def] = parametric;
+  tui.terminfo_lengths[def] = cached_len_in;
+
+  size_t written = terminfo_copy_cached0(&tui, def, dst, len);
+  if (cached_len_out != NULL) {
+    *cached_len_out = tui.terminfo_lengths[def];
+  }
+
+  return written;
+}
+#endif
+
+static void terminfo_cache_entry(TUIData *tui, TerminfoDef what)
+{
+  const char *str = tui->ti.defs[what];
+  if (str == NULL || *str == NUL) {
+    tui->terminfo_lengths[what] = 0;
+    tui->terminfo_parametric[what] = false;
+    return;
+  }
+
+  tui->terminfo_lengths[what] = strlen(str);
+  tui->terminfo_parametric[what] = terminfo_is_parametric(str);
+}
+
+static void terminfo_cache_all(TUIData *tui)
+{
+  for (TerminfoDef def = 0; def < kTermCount; def++) {
+    terminfo_cache_entry(tui, def);
+  }
+}
 static void terminfo_set_if_empty(TUIData *tui, TerminfoDef str, const char *val)
 {
   if (!tui->ti.defs[str]) {
     tui->ti.defs[str] = val;
+    terminfo_cache_entry(tui, str);
   }
 }
 
 static void terminfo_set_str(TUIData *tui, TerminfoDef str, const char *val)
 {
   tui->ti.defs[str] = val;
+  terminfo_cache_entry(tui, str);
 }
 
 /// Determine if the terminal supports truecolor or not.
@@ -2425,12 +2517,9 @@ static size_t flush_buf_start(TUIData *tui, char *buf, size_t len)
   } else if (!tui->is_invisible) {
     tui->is_invisible = true;
 
-    // TODO(bfredl): zero-param terminfo strings should be pre-filtered so we can just
-    // return a cached string here
-    TPVAR null_params[9] = { 0 };
     const char *str = tui->ti.defs[kTerm_cursor_invisible];
     if (str != NULL) {
-      return terminfo_fmt(buf, buf + len, str, null_params);
+      return terminfo_copy_cached0(tui, kTerm_cursor_invisible, buf, len);
     }
   }
 
@@ -2453,17 +2542,16 @@ static size_t flush_buf_end(TUIData *tui, char *buf, size_t len)
     offset += sizeof SYNC_END - 1;
   }
 
-  const char *str = NULL;
+  TerminfoDef cursor_def = kTermCount;
   if (tui->is_invisible && !should_invisible(tui)) {
-    str = tui->ti.defs[kTerm_cursor_normal];
+    cursor_def = kTerm_cursor_normal;
     tui->is_invisible = false;
   } else if (!tui->is_invisible && should_invisible(tui)) {
-    str = tui->ti.defs[kTerm_cursor_invisible];
+    cursor_def = kTerm_cursor_invisible;
     tui->is_invisible = true;
   }
-  TPVAR null_params[9] = { 0 };
-  if (str != NULL) {
-    offset += terminfo_fmt(buf + offset, buf + len, str, null_params);
+  if (cursor_def < kTermCount) {
+    offset += terminfo_copy_cached0(tui, cursor_def, buf + offset, len - offset);
   }
 
   return offset;
@@ -2497,12 +2585,42 @@ static void flush_buf(TUIData *tui)
       fwrite(bufs[i].base, bufs[i].len, 1, tui->screenshot);
     }
   } else {
-    int ret
-      = uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs, ARRAY_SIZE(bufs), NULL);
-    if (ret) {
-      ELOG("uv_write failed: %s", uv_strerror(ret));
+    size_t total = 0;
+    for (size_t i = 0; i < ARRAY_SIZE(bufs); i++) {
+      total += bufs[i].len;
     }
-    uv_run(&tui->write_loop, UV_RUN_DEFAULT);
+
+    ssize_t tried = 0;
+    if (total > 0) {
+      tried = uv_try_write((uv_stream_t *)&tui->output_handle, bufs, ARRAY_SIZE(bufs));
+    }
+
+    if (tried >= 0 && (size_t)tried >= total) {
+      // All bytes written synchronously, nothing left to flush.
+    } else {
+      if (tried > 0) {
+        size_t consumed = (size_t)tried;
+        for (size_t i = 0; i < ARRAY_SIZE(bufs); i++) {
+          if (consumed >= bufs[i].len) {
+            consumed -= bufs[i].len;
+            bufs[i].len = UV_BUF_LEN(0);
+          } else if (consumed > 0) {
+            bufs[i].base += consumed;
+            bufs[i].len -= consumed;
+            consumed = 0;
+          }
+        }
+      } else if (tried < 0 && tried != UV_EAGAIN) {
+        ELOG("uv_try_write failed: %s", uv_strerror((int)tried));
+      }
+
+      int ret
+        = uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs, ARRAY_SIZE(bufs), NULL);
+      if (ret) {
+        ELOG("uv_write failed: %s", uv_strerror(ret));
+      }
+      uv_run(&tui->write_loop, UV_RUN_DEFAULT);
+    }
   }
   tui->buf_to_flush = NULL;
   tui->bufpos = 0;

@@ -28,6 +28,29 @@ typedef struct {
 
 #include "tui/terminfo.c.generated.h"
 
+bool terminfo_is_parametric(const char *str)
+{
+  if (str == NULL || *str == NUL) {
+    return false;
+  }
+
+  for (const char *p = str; *p != NUL; p++) {
+    if (*p != '%') {
+      continue;
+    }
+
+    char next = *(p + 1);
+    if (next == '%') {
+      p++;
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
 bool terminfo_is_term_family(const char *term, const char *family)
 {
   if (!term) {
