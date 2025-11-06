@@ -8,4 +8,6 @@ typedef struct {
   char *string;
 } TPVAR;
 
+bool terminfo_is_parametric(const char *str);
+
 #include "tui/terminfo.h.generated.h"
