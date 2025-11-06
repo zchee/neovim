@@ -202,6 +202,7 @@ local cimportstr
 local previous_defines_init = [[
 typedef struct { char bytes[16]; } __attribute__((aligned(16))) __uint128_t;
 typedef struct { char bytes[16]; } __attribute__((aligned(16))) __float128;
+typedef unsigned int ipc_info_object_type_t;
 ]]
 
 local preprocess_cache_init = {} --- @type table<string,string>

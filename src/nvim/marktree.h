@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "nvim/decoration_defs.h"
+#include "nvim/extmark_defs.h"
 #include "nvim/marktree_defs.h"  // IWYU pragma: keep
 #include "nvim/pos_defs.h"  // IWYU pragma: keep
 // only for debug functions:
@@ -135,5 +136,10 @@ static inline DecorVirtText *mt_decor_virt(MTKey mark)
 {
   return (mark.flags & MT_FLAG_DECOR_EXT) ? mark.decor_data.ext.vt : NULL;
 }
+
+bool marktree_bytecache_lookup(MarkTree *b, int64_t line, bcount_t *byte_out);
+void marktree_bytecache_store(MarkTree *b, int64_t line, bcount_t byte);
+void marktree_bytecache_apply_splice(MarkTree *b, int start_row, int old_row, int new_row,
+                                     bcount_t old_byte, bcount_t new_byte);
 
 #include "marktree.h.generated.h"
