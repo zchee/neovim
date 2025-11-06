@@ -46,6 +46,32 @@
 # include "nvim/os/os_win_console.h"
 #endif
 
+#ifdef UNIT_TESTING
+static ssize_t (*uv_try_write_override)(uv_stream_t *, const uv_buf_t[], unsigned int);
+static int (*uv_write_override)(uv_write_t *, uv_stream_t *, const uv_buf_t[], unsigned int, uv_write_cb);
+#endif
+
+static ssize_t tui_uv_try_write(uv_stream_t *stream, const uv_buf_t bufs[], unsigned int nbufs)
+{
+#ifdef UNIT_TESTING
+  if (uv_try_write_override != NULL) {
+    return uv_try_write_override(stream, bufs, nbufs);
+  }
+#endif
+  return uv_try_write(stream, bufs, nbufs);
+}
+
+static int tui_uv_write(uv_write_t *req, uv_stream_t *stream, const uv_buf_t bufs[], unsigned int nbufs,
+                        uv_write_cb cb)
+{
+#ifdef UNIT_TESTING
+  if (uv_write_override != NULL) {
+    return uv_write_override(req, stream, bufs, nbufs, cb);
+  }
+#endif
+  return uv_write(req, stream, bufs, nbufs, cb);
+}
+
 // Maximum amount of time (in ms) to wait to receive a Device Attributes
 // response before exiting.
 #define EXIT_TIMEOUT_MS 1000
@@ -2592,7 +2618,7 @@ static void flush_buf(TUIData *tui)
 
     ssize_t tried = 0;
     if (total > 0) {
-      tried = uv_try_write((uv_stream_t *)&tui->output_handle, bufs, ARRAY_SIZE(bufs));
+      tried = tui_uv_try_write((uv_stream_t *)&tui->output_handle, bufs, ARRAY_SIZE(bufs));
     }
 
     if (tried >= 0 && (size_t)tried >= total) {
@@ -2615,7 +2641,7 @@ static void flush_buf(TUIData *tui)
       }
 
       int ret
-        = uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs, ARRAY_SIZE(bufs), NULL);
+        = tui_uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs, ARRAY_SIZE(bufs), NULL);
       if (ret) {
         ELOG("uv_write failed: %s", uv_strerror(ret));
       }
@@ -2625,6 +2651,108 @@ static void flush_buf(TUIData *tui)
   tui->buf_to_flush = NULL;
   tui->bufpos = 0;
 }
+
+#ifdef UNIT_TESTING
+typedef struct {
+  ssize_t result;
+  size_t call_count;
+  size_t last_total;
+  size_t last_lengths[3];
+} TuiTryState;
+
+typedef struct {
+  int result;
+  size_t call_count;
+  size_t last_total;
+  size_t last_lengths[3];
+} TuiWriteState;
+
+static TuiTryState g_tui_try_state;
+static TuiWriteState g_tui_write_state;
+
+static ssize_t nvim_test_uv_try_write_override(uv_stream_t *stream, const uv_buf_t bufs[], unsigned int nbufs)
+{
+  (void)stream;
+  size_t total = 0;
+  for (unsigned int i = 0; i < nbufs; i++) {
+    size_t len = bufs[i].len;
+    if (i < ARRAY_SIZE(g_tui_try_state.last_lengths)) {
+      g_tui_try_state.last_lengths[i] = len;
+    }
+    total += len;
+  }
+  g_tui_try_state.last_total = total;
+  g_tui_try_state.call_count++;
+  return g_tui_try_state.result;
+}
+
+static int nvim_test_uv_write_override(uv_write_t *req, uv_stream_t *stream, const uv_buf_t bufs[],
+                                       unsigned int nbufs, uv_write_cb cb)
+{
+  (void)req;
+  (void)stream;
+  (void)cb;
+  size_t total = 0;
+  for (unsigned int i = 0; i < nbufs; i++) {
+    size_t len = bufs[i].len;
+    if (i < ARRAY_SIZE(g_tui_write_state.last_lengths)) {
+      g_tui_write_state.last_lengths[i] = len;
+    }
+    total += len;
+  }
+  g_tui_write_state.last_total = total;
+  g_tui_write_state.call_count++;
+  return g_tui_write_state.result;
+}
+
+NvimTuiFlushDiag nvim_test_tui_flush_diag(size_t payload_len, ssize_t try_result, int write_ret,
+                                          bool start_invisible, bool want_invisible)
+{
+  NvimTuiFlushDiag diag = { 0 };
+
+  memset(&g_tui_try_state, 0, sizeof(g_tui_try_state));
+  memset(&g_tui_write_state, 0, sizeof(g_tui_write_state));
+  g_tui_try_state.result = try_result;
+  g_tui_write_state.result = write_ret;
+
+  uv_try_write_override = nvim_test_uv_try_write_override;
+  uv_write_override = nvim_test_uv_write_override;
+
+  TUIData tui = { 0 };
+  int init_rc = uv_loop_init(&tui.write_loop);
+  assert(init_rc == 0);
+
+  if (payload_len > sizeof(tui.buf)) {
+    payload_len = sizeof(tui.buf);
+  }
+  for (size_t i = 0; i < payload_len; i++) {
+    tui.buf[i] = (char)('a' + (int)(i % 26));
+  }
+  tui.bufpos = payload_len;
+  tui.is_invisible = start_invisible;
+  tui.want_invisible = want_invisible;
+
+  flush_buf(&tui);
+
+  diag.try_call_count = g_tui_try_state.call_count;
+  diag.write_call_count = g_tui_write_state.call_count;
+  diag.try_total = g_tui_try_state.last_total;
+  diag.write_total = g_tui_write_state.last_total;
+  for (size_t i = 0; i < ARRAY_SIZE(diag.try_buf_lens); i++) {
+    diag.try_buf_lens[i] = g_tui_try_state.last_lengths[i];
+    diag.write_buf_lens[i] = g_tui_write_state.last_lengths[i];
+  }
+  diag.final_invisible = tui.is_invisible;
+
+  int close_rc = uv_loop_close(&tui.write_loop);
+  assert(close_rc == 0);
+
+  uv_try_write_override = NULL;
+  uv_write_override = NULL;
+
+  return diag;
+}
+#endif
 
 /// Try to get "kbs" code from stty because "the terminfo kbs entry is extremely
 /// unreliable." (Vim, Bash, and tmux also do this.)
