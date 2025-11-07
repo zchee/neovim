@@ -124,9 +124,8 @@ void marktree_bytecache_apply_splice(MarkTree *b, int start_row, int old_row, in
                                      bcount_t old_byte, bcount_t new_byte)
 {
   Map(int64_t, int64_t) *cache = b->byte_cache;
-  MapHash *hash = &cache->set.h;
 
-  if (hash->n_buckets == 0 || cache->set.keys == NULL) {
+  if (map_size(cache) == 0) {
     return;
   }
 
@@ -137,34 +136,26 @@ void marktree_bytecache_apply_splice(MarkTree *b, int start_row, int old_row, in
   kvec_t(int64_t) lines_to_drop = KV_INITIAL_VALUE;
   kvec_t(ByteCacheMove) moves = KV_INITIAL_VALUE;
 
-  for (uint32_t i = 0; i < hash->n_buckets; i++) {
-    if (mh_is_either(hash, i)) {
-      continue;
-    }
-    const int64_t line = cache->set.keys[i];
-    const int64_t value = cache->values[i];
-
+  int64_t line = 0;
+  int64_t value = 0;
+  map_foreach(cache, line, value, {
     if (line < start_row) {
       continue;
     }
 
     const bool inside_region = (old_row > 0) && (line >= start_row) && (line <= affected_end_row);
-
     if (inside_region) {
       kv_push(lines_to_drop, line);
       continue;
     }
 
-    if (old_row == 0 && new_row == 0) {
-      if (byte_shift != 0 && line > start_row) {
-        cache->values[i] = value + byte_shift;
-      }
-      continue;
-    }
-
     if (line_shift == 0) {
       if (byte_shift != 0 && line > affected_end_row) {
-        cache->values[i] = value + byte_shift;
+        kv_push(moves, ((ByteCacheMove){
+                          .old_line = line,
+                          .new_line = line,
+                          .new_value = value + byte_shift,
+                        }));
       }
       continue;
     }
@@ -176,7 +167,7 @@ void marktree_bytecache_apply_splice(MarkTree *b, int start_row, int old_row, in
                         .new_value = value + byte_shift,
                       }));
     }
-  }
+  });
 
   for (size_t i = 0; i < kv_size(lines_to_drop); i++) {
     map_del(int64_t, int64_t)(cache, kv_A(lines_to_drop, i), NULL);
@@ -186,6 +177,10 @@ void marktree_bytecache_apply_splice(MarkTree *b, int start_row, int old_row, in
   for (size_t i = 0; i < kv_size(moves); i++) {
     ByteCacheMove move = kv_A(moves, i);
     map_del(int64_t, int64_t)(cache, move.old_line, NULL);
+  }
+
+  for (size_t i = 0; i < kv_size(moves); i++) {
+    ByteCacheMove move = kv_A(moves, i);
     map_put(int64_t, int64_t)(cache, move.new_line, move.new_value);
   }
   kv_destroy(moves);
