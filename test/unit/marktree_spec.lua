@@ -7,6 +7,10 @@ local ok = t.ok
 
 local lib = t.cimport('./src/nvim/marktree.h')
 
+local function new_marktree()
+  return ffi.gc(lib.marktree_alloc(), lib.marktree_free)
+end
+
 local function tablelength(tbl)
   local count = 0
   for _ in pairs(tbl) do
@@ -121,7 +125,7 @@ describe('marktree', function()
   end)
 
   itp('works', function()
-    local tree = ffi.new('MarkTree[1]') -- zero initialized by luajit
+    local tree = new_marktree() -- zero initialized by marktree_alloc
     local shadow = {}
     local iter = ffi.new('MarkTreeIter[1]')
     local iter2 = ffi.new('MarkTreeIter[1]')
@@ -307,7 +311,7 @@ describe('marktree', function()
       local str2 = lib.mt_inspect(tree, true, true)
       local dot2 = ffi.string(str2.data, str2.size)
       print('actual:\n\n' .. 'Xafile.dot' .. '\n\nexpected:\n\n' .. 'Xefile.dot' .. '\n')
-      print('nivå', tree[0].root.level)
+      print('nivå', tree.root.level)
       io.stdout:flush()
       local afil = io.open('Xafile.dot', 'wb')
       afil:write(dot1)
@@ -322,7 +326,7 @@ describe('marktree', function()
   end
 
   itp('works with intersections', function()
-    local tree = ffi.new('MarkTree[1]') -- zero initialized by luajit
+    local tree = new_marktree() -- zero initialized by marktree_alloc
 
     local ids = {}
 
@@ -351,7 +355,7 @@ describe('marktree', function()
   end)
 
   itp('works with intersections with a big tree', function()
-    local tree = ffi.new('MarkTree[1]') -- zero initialized by luajit
+    local tree = new_marktree() -- zero initialized by marktree_alloc
 
     local ids = {}
 
@@ -363,8 +367,8 @@ describe('marktree', function()
     end
 
     check_intersections(tree)
-    eq(2000, tree[0].n_keys)
-    ok(tree[0].root.level >= 2)
+    eq(2000, tree.n_keys)
+    ok(tree.root.level >= 2)
 
     local iter = ffi.new('MarkTreeIter[1]')
 
@@ -390,11 +394,11 @@ describe('marktree', function()
       end
     end
 
-    eq(0, tree[0].n_keys)
+    eq(0, tree.n_keys)
   end)
 
   itp('works with intersections and marktree_splice', function()
-    local tree = ffi.new('MarkTree[1]') -- zero initialized by luajit
+    local tree = new_marktree() -- zero initialized by marktree_alloc
 
     for i = 1, 1000 do
       put(tree, 1, i, false, 2, 1000 - i, false)
@@ -404,8 +408,8 @@ describe('marktree', function()
     end
 
     check_intersections(tree)
-    eq(2000, tree[0].n_keys)
-    ok(tree[0].root.level >= 2)
+    eq(2000, tree.n_keys)
+    ok(tree.root.level >= 2)
 
     for _ = 1, 10 do
       lib.marktree_splice(tree, 0, 0, 0, 100, 0, 0)
@@ -414,7 +418,7 @@ describe('marktree', function()
   end)
 
   itp('marktree_move should preserve key order', function()
-    local tree = ffi.new('MarkTree[1]') -- zero initialized by luajit
+    local tree = new_marktree() -- zero initialized by marktree_alloc
     local iter = ffi.new('MarkTreeIter[1]')
     local ids = {}
 
@@ -432,7 +436,7 @@ describe('marktree', function()
   end)
 
   itp('works with intersections and marktree_move', function()
-    local tree = ffi.new('MarkTree[1]') -- zero initialized by luajit
+    local tree = new_marktree() -- zero initialized by marktree_alloc
 
     local ids = {}
 
@@ -455,7 +459,7 @@ describe('marktree', function()
   end)
 
   itp('works with intersections with a even bigger tree', function()
-    local tree = ffi.new('MarkTree[1]') -- zero initialized by luajit
+    local tree = new_marktree() -- zero initialized by marktree_alloc
 
     local ids = {}
 
@@ -480,7 +484,7 @@ describe('marktree', function()
           for i = row1 + 1, row2 do
             table.insert(at_row[i], id)
           end
-          --if tree[0].root.level == 4 then error("kk"..k) end
+          --if tree.root.level == 4 then error("kk"..k) end
           if k % 100 * size_factor == 1 or (k < 2000 and k % 100 == 1) then
             check_intersections(tree)
           end
@@ -489,8 +493,8 @@ describe('marktree', function()
       end
     end
 
-    eq(2 * size, tree[0].n_keys)
-    ok(tree[0].root.level >= 3)
+    eq(2 * size, tree.n_keys)
+    ok(tree.root.level >= 3)
     check_intersections(tree)
 
     local iter = ffi.new('MarkTreeIter[1]')
@@ -521,11 +525,11 @@ describe('marktree', function()
       end
     end
 
-    eq(0, tree[0].n_keys)
+    eq(0, tree.n_keys)
   end)
 
   itp('works with intersections with a even bigger tree and splice', function()
-    local tree = ffi.new('MarkTree[1]') -- zero initialized by luajit
+    local tree = new_marktree() -- zero initialized by marktree_alloc
 
     -- too much overhead on ASAN
     local size_factor = t.is_asan() and 3 or 10
@@ -547,7 +551,7 @@ describe('marktree', function()
           for i = row1 + 1, row2 do
             table.insert(at_row[i], id)
           end
-          --if tree[0].root.level == 4 then error("kk"..k) end
+          --if tree.root.level == 4 then error("kk"..k) end
           if k % 100 * size_factor == 1 or (k < 2000 and k % 100 == 1) then
             check_intersections(tree)
           end
@@ -556,8 +560,8 @@ describe('marktree', function()
       end
     end
 
-    eq(2 * size, tree[0].n_keys)
-    ok(tree[0].root.level >= 3)
+    eq(2 * size, tree.n_keys)
+    ok(tree.root.level >= 3)
     check_intersections(tree)
 
     for _ = 1, 10 do
@@ -569,7 +573,7 @@ describe('marktree', function()
   end)
 
   itp('works with meta counts', function()
-    local tree = ffi.new('MarkTree[1]') -- zero initialized by luajit
+    local tree = new_marktree() -- zero initialized by marktree_alloc
 
     -- add
     local shadow = {}
@@ -657,8 +661,8 @@ describe('marktree byte cache', function()
     return true, tonumber(out[0])
   end
 
-  it('stores and retrieves offsets', function()
-    local tree = ffi.new('MarkTree[1]')
+  itp('stores and retrieves offsets', function()
+    local tree = new_marktree()
     eq(false, select(1, lookup(tree, 3)))
 
     lib.marktree_bytecache_store(tree, 3, 42)
@@ -667,8 +671,8 @@ describe('marktree byte cache', function()
     eq(42, value)
   end)
 
-  it('adjusts single-line edits without invalidating cached line', function()
-    local tree = ffi.new('MarkTree[1]')
+  itp('adjusts single-line edits without invalidating cached line', function()
+    local tree = new_marktree()
     lib.marktree_bytecache_store(tree, 0, 0)
     lib.marktree_bytecache_store(tree, 1, 5)
     lib.marktree_bytecache_store(tree, 3, 15)
@@ -682,8 +686,8 @@ describe('marktree byte cache', function()
     eq(17, v3)
   end)
 
-  it('drops cached entries inside deleted regions and shifts following lines', function()
-    local tree = ffi.new('MarkTree[1]')
+  itp('drops cached entries inside deleted regions and shifts following lines', function()
+    local tree = new_marktree()
     lib.marktree_bytecache_store(tree, 0, 0)
     lib.marktree_bytecache_store(tree, 1, 4)
     lib.marktree_bytecache_store(tree, 2, 9)
@@ -700,8 +704,8 @@ describe('marktree byte cache', function()
     eq(20, shifted)
   end)
 
-  it('reindexes cached entries after inserting lines', function()
-    local tree = ffi.new('MarkTree[1]')
+  itp('reindexes cached entries after inserting lines', function()
+    local tree = new_marktree()
     lib.marktree_bytecache_store(tree, 0, 0)
     lib.marktree_bytecache_store(tree, 2, 12)
     lib.marktree_bytecache_store(tree, 5, 40)
