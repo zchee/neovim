@@ -100,6 +100,20 @@ void marktree_bytecache_store(MarkTree *b, int64_t line, bcount_t byte)
   map_put(int64_t, int64_t)(b->byte_cache, line, (int64_t)byte);
 }
 
+MarkTree *marktree_alloc(void)
+{
+  return (MarkTree *)xcalloc(1, sizeof(MarkTree));
+}
+
+void marktree_free(MarkTree *tree)
+{
+  if (tree == NULL) {
+    return;
+  }
+  marktree_clear(tree);
+  xfree(tree);
+}
+
 typedef struct {
   int64_t old_line;
   int64_t new_line;

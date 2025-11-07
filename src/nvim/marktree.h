@@ -142,4 +142,7 @@ void marktree_bytecache_store(MarkTree *b, int64_t line, bcount_t byte);
 void marktree_bytecache_apply_splice(MarkTree *b, int start_row, int old_row, int new_row,
                                      bcount_t old_byte, bcount_t new_byte);
 
+MarkTree *marktree_alloc(void);
+void marktree_free(MarkTree *tree);
+
 #include "marktree.h.generated.h"
