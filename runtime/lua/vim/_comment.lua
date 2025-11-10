@@ -1,3 +1,140 @@
+
+local range_mod = require('vim.treesitter._range')
+
+local function debug_log(...)
+  local path = vim.g._comment_debug
+  if not path then
+    return
+  end
+  local parts = {}
+  for i = 1, select('#', ...) do
+    parts[i] = tostring(select(i, ...))
+  end
+  vim.fn.writefile({ table.concat(parts, '	') }, path, 'a')
+end
+
+local ft_runtime_templates = {
+  'ftplugin/%s.vim',
+  'ftplugin/%s.lua',
+  'ftplugin/%s_*.vim',
+  'ftplugin/%s_*.lua',
+  'ftplugin/%s/*.vim',
+  'ftplugin/%s/*.lua',
+}
+
+local ft_commentstring_cache = {} ---@type table<string,string|false>
+local lang_commentstring_cache = {} ---@type table<string,string|false>
+
+local function load_filetype_commentstring(ft)
+  local cached = ft_commentstring_cache[ft]
+  if cached ~= nil then
+    return cached or nil
+  end
+
+  local ok, cs = pcall(vim.filetype.get_option, ft, 'commentstring')
+  if ok and cs and cs ~= '' then
+    ft_commentstring_cache[ft] = cs
+    debug_log('ft_option', ft, cs)
+    return cs
+  end
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  local ok_runtime, runtime_cs = pcall(function()
+    return vim.api.nvim_buf_call(buf, function()
+      vim.b.did_ftplugin = nil
+      vim.bo.commentstring = ''
+      vim.bo.filetype = ft
+
+      local patterns = {}
+      for i = 1, #ft_runtime_templates do
+        patterns[i] = ft_runtime_templates[i]:format(ft)
+      end
+
+      local runtime_cmd = 'silent! runtime! ' .. table.concat(patterns, ' ')
+      pcall(vim.cmd, runtime_cmd)
+      return vim.bo.commentstring
+    end)
+  end)
+
+  vim.api.nvim_buf_delete(buf, { force = true })
+
+  if ok_runtime and runtime_cs and runtime_cs ~= '' then
+    ft_commentstring_cache[ft] = runtime_cs
+    debug_log('ft_runtime', ft, runtime_cs)
+    return runtime_cs
+  end
+
+  ft_commentstring_cache[ft] = false
+  debug_log('ft_missing', ft)
+  return nil
+end
+
+local function commentstring_for_lang(lang)
+  local cached = lang_commentstring_cache[lang]
+  if cached ~= nil then
+    return cached or nil
+  end
+
+  local filetypes = vim.treesitter.language.get_filetypes(lang)
+  if filetypes then
+    for _, ft in ipairs(filetypes) do
+      local cs = load_filetype_commentstring(ft)
+      if cs and cs ~= '' then
+        lang_commentstring_cache[lang] = cs
+        return cs
+      end
+    end
+  end
+
+  lang_commentstring_cache[lang] = false
+  return nil
+end
+
+local function injection_commentstring(lang_tree, ref_range6)
+  if not lang_tree._injection_query then
+    return nil
+  end
+
+  local ok_all, all_injections = pcall(lang_tree._get_injections, lang_tree, true, {})
+  if not ok_all or not all_injections then
+    all_injections = nil
+  end
+
+  if all_injections then
+    if next(all_injections) then
+      pcall(lang_tree._add_injections, lang_tree, all_injections)
+    end
+    for lang, regions in pairs(all_injections) do
+      if lang and regions then
+        for _, region in ipairs(regions) do
+          for _, range in ipairs(region) do
+            if range_mod.contains(range, ref_range6) then
+              local cs = commentstring_for_lang(lang)
+              if cs and cs ~= '' then
+                return cs
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  local children = lang_tree:children()
+  if children then
+    for _, child in pairs(children) do
+      if child:contains(ref_range6) then
+        local cs = commentstring_for_lang(child:lang())
+        if cs and cs ~= '' then
+          return cs
+        end
+      end
+    end
+  end
+
+  return nil
+end
+
 ---@class vim._comment.Parts
 ---@field left string Left part of comment
 ---@field right string Right part of comment
@@ -18,6 +155,42 @@ local function get_commentstring(ref_position)
   local row, col = ref_position[1] - 1, ref_position[2]
   local ref_range = { row, col, row, col + 1 }
 
+  ts_parser:invalidate(true)
+  ts_parser:parse(true)
+
+  local ref_range6 = range_mod.add_bytes(0, ref_range)
+
+  local function lang_depth(tree)
+    local depth = 0
+    while tree do
+      depth = depth + 1
+      tree = tree:parent()
+    end
+    return depth
+  end
+
+  local function pick_best_lang_tree()
+    local best_lang_tree, best_depth = nil, -1
+    local lang_for_range = ts_parser:language_for_range(ref_range)
+    if lang_for_range and lang_for_range:contains(ref_range6) then
+      best_lang_tree = lang_for_range
+      best_depth = lang_depth(lang_for_range)
+    end
+
+    ts_parser:for_each_tree(function(_, lang_tree)
+      if lang_tree:contains(ref_range6) then
+        local depth = lang_depth(lang_tree)
+        if depth > best_depth then
+          best_lang_tree = lang_tree
+          best_depth = depth
+        end
+      end
+    end)
+    return best_lang_tree, best_depth
+  end
+
+  local best_lang_tree, best_depth = pick_best_lang_tree()
+
   -- Get 'commentstring' from tree-sitter captures' metadata.
   -- Traverse backwards to prefer narrower captures.
   local caps = vim.treesitter.get_captures_at_pos(0, row, col)
@@ -30,35 +203,87 @@ local function get_commentstring(ref_position)
     end
   end
 
-  -- - Get 'commentstring' from the deepest LanguageTree which both contains
-  --   reference range and has valid 'commentstring' (meaning it has at least
-  --   one associated 'filetype' with valid 'commentstring').
-  --   In simple cases using `parser:language_for_range()` would be enough, but
-  --   it fails for languages without valid 'commentstring' (like 'comment').
-  local ts_cs, res_level = nil, 0
-
-  ---@param lang_tree vim.treesitter.LanguageTree
-  local function traverse(lang_tree, level)
-    if not lang_tree:contains(ref_range) then
-      return
+  local function commentstring_from_highlight(lang_tree)
+    local query = vim.treesitter.query.get(lang_tree:lang(), 'highlights')
+    if not query then
+      return nil
     end
 
-    local lang = lang_tree:lang()
-    local filetypes = vim.treesitter.language.get_filetypes(lang)
-    for _, ft in ipairs(filetypes) do
-      local cur_cs = vim.filetype.get_option(ft, 'commentstring')
-      if cur_cs ~= '' and level > res_level then
-        ts_cs = cur_cs
+    local source = lang_tree:source()
+    local best_cs, best_range
+    for _, tree in pairs(lang_tree:trees()) do
+      local root = tree:root()
+      for capture_id, node, metadata in query:iter_captures(root, source, row, row + 1) do
+        local md = metadata and (metadata['bo.commentstring']
+          or metadata[capture_id] and metadata[capture_id]['bo.commentstring'])
+        if md then
+          local capture_range = vim.treesitter.get_range(node, source, metadata and metadata[capture_id])
+          if capture_range and range_mod.contains(capture_range, ref_range6) then
+            if not best_range or range_mod.contains(best_range, capture_range) then
+              best_cs = md
+              best_range = capture_range
+              debug_log('highlight_candidate', lang_tree:lang(), capture_id, vim.inspect(capture_range), md)
+            end
+          end
+        end
+      end
+    end
+    return best_cs
+  end
+
+  local function deepest_lang_tree(tree)
+    if not tree or not tree:contains(ref_range6) then
+      return nil
+    end
+
+    local children = tree:children()
+    if children then
+      for _, child in pairs(children) do
+        local child_match = deepest_lang_tree(child)
+        if child_match then
+          return child_match
+        end
       end
     end
 
-    for _, child_lang_tree in pairs(lang_tree:children()) do
-      traverse(child_lang_tree, level + 1)
+    return tree
+  end
+
+  best_lang_tree, best_depth = pick_best_lang_tree()
+
+  local lang_tree = best_lang_tree or deepest_lang_tree(ts_parser)
+
+  if lang_tree == ts_parser then
+    local inj_cs = injection_commentstring(ts_parser, ref_range6)
+    if inj_cs and inj_cs ~= '' then
+      return inj_cs
     end
   end
-  traverse(ts_parser, 1)
 
-  return ts_cs or buf_cs
+  if not lang_tree then
+    return buf_cs
+  end
+
+  local seen_langs = {}
+  while lang_tree do
+    seen_langs[#seen_langs + 1] = lang_tree:lang()
+
+    local hl_cs = commentstring_from_highlight(lang_tree)
+    if hl_cs and hl_cs ~= '' then
+      return hl_cs
+    end
+
+    local cs = commentstring_for_lang(lang_tree:lang())
+    if cs and cs ~= '' then
+      debug_log('ft_return', lang_tree:lang(), cs)
+      return cs
+    end
+
+    lang_tree = lang_tree:parent()
+  end
+
+  debug_log('fallback_buf', row, col, buf_cs)
+  return buf_cs
 end
 
 --- Compute comment parts from 'commentstring'
@@ -193,24 +418,88 @@ end
 ---@param ref_position? [integer, integer]
 local function toggle_lines(line_start, line_end, ref_position)
   ref_position = ref_position or { line_start, 0 }
-  local parts = get_comment_parts(ref_position)
+
+  local count = line_end - line_start + 1
+  if count <= 0 then
+    return
+  end
+
   local lines = vim.api.nvim_buf_get_lines(0, line_start - 1, line_end, false)
-  local indent, is_comment = get_lines_info(lines, parts)
 
-  local f = is_comment and make_uncomment_function(parts) or make_comment_function(parts, indent)
+  local parts_cache = {}
+  local per_line_parts = {}
 
-  -- Direct `nvim_buf_set_lines()` essentially removes both regular and
-  -- extended marks  (squashes to empty range at either side of the region)
-  -- inside region. Use 'lockmarks' to preserve regular marks.
-  -- Preserving extmarks is not a universally good thing to do:
-  -- - Good for non-highlighting in text area extmarks (like showing signs).
-  -- - Debatable for highlighting in text area (like LSP semantic tokens).
-  --   Mostly because it causes flicker as highlighting is preserved during
-  --   comment toggling.
+  local function cache_parts(parts)
+    local key = parts.left .. string.char(0) .. parts.right
+    local cached = parts_cache[key]
+    if cached then
+      return cached
+    end
+    parts_cache[key] = parts
+    return parts
+  end
+
+  local function position_for_line(idx, line)
+    local lnum = line_start + idx - 1
+    if idx == 1 and ref_position and ref_position[1] == lnum then
+      return { ref_position[1], ref_position[2] }
+    end
+    local first = line:find('%S')
+    local col = first and (first - 1) or 0
+    return { lnum, col }
+  end
+
+  for idx, line in ipairs(lines) do
+    local pos = position_for_line(idx, line)
+    local parts = get_comment_parts(pos)
+    per_line_parts[idx] = cache_parts(parts)
+  end
+
+  if #lines > 1 and per_line_parts[1] then
+    local shared_parts = per_line_parts[1]
+    for idx = 2, #per_line_parts do
+      local parts = per_line_parts[idx]
+      if parts.left ~= shared_parts.left or parts.right ~= shared_parts.right then
+        per_line_parts[idx] = shared_parts
+      end
+    end
+  end
+  local function same_parts(a, b)
+    return a.left == b.left and a.right == b.right
+  end
+
+  local new_lines = {}
+  for i = 1, #lines do
+    new_lines[i] = lines[i]
+  end
+
+  local i = 1
+  while i <= #lines do
+    local parts = per_line_parts[i]
+    local j = i
+    while j + 1 <= #lines and same_parts(per_line_parts[j + 1], parts) do
+      j = j + 1
+    end
+
+    local slice = {}
+    for k = i, j do
+      slice[#slice + 1] = lines[k]
+    end
+
+    local indent, is_comment = get_lines_info(slice, parts)
+    local fn = is_comment and make_uncomment_function(parts) or make_comment_function(parts, indent)
+    for k = i, j do
+      new_lines[k] = fn(lines[k])
+    end
+
+    i = j + 1
+  end
+
   vim._with({ lockmarks = true }, function()
-    vim.api.nvim_buf_set_lines(0, line_start - 1, line_end, false, vim.tbl_map(f, lines))
+    vim.api.nvim_buf_set_lines(0, line_start - 1, line_end, false, new_lines)
   end)
 end
+
 
 --- Operator which toggles user-supplied range of lines
 ---@param mode string?
@@ -237,8 +526,12 @@ local function operator(mode)
 
   -- NOTE: use cursor position as reference for possibly computing local
   -- tree-sitter-based 'commentstring'. Recompute every time for a proper
-  -- dot-repeat. In Visual and sometimes Normal mode it uses start position.
-  toggle_lines(lnum_from, lnum_to, vim.api.nvim_win_get_cursor(0))
+  -- dot-repeat. Use the start of the operator range so Visual selections pick
+  -- the left-most language region.
+  local ref_col = math.max(col_from - 1, 0)
+  debug_log('operator_start', lnum_from, lnum_to, ref_col)
+  toggle_lines(lnum_from, lnum_to, { lnum_from, ref_col })
+  debug_log('operator_end', lnum_from, lnum_to)
   return ''
 end
 
