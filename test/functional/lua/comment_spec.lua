@@ -40,12 +40,48 @@ local get_cursor = function()
   return api.nvim_win_get_cursor(0)
 end
 
+local ensure_project_runtime = function()
+  exec_lua [[
+    local cwd = vim.fn.getcwd()
+    local project_rtp = cwd .. '/runtime'
+    if not vim.o.runtimepath:find(project_rtp, 1, true) then
+      vim.opt.runtimepath:prepend(project_rtp)
+    end
+    local build_rtp = cwd .. '/build/lib/nvim'
+    if vim.uv.fs_stat(build_rtp) and not vim.o.runtimepath:find(build_rtp, 1, true) then
+      vim.opt.runtimepath:prepend(build_rtp)
+    end
+  ]]
+end
+
+local reset_debug_log = function()
+  exec_lua [[
+    if vim.g._comment_debug then
+      pcall(vim.fn.delete, vim.g._comment_debug)
+    end
+  ]]
+end
+
 local setup_treesitter = function()
   -- NOTE: This leverages bundled Vimscript and Lua tree-sitter parsers
   api.nvim_set_option_value('filetype', 'vim', { buf = 0 })
-  exec_lua('vim.treesitter.start()')
+  exec_lua [[
+    local cwd = vim.fn.getcwd()
+    local project_rtp = cwd .. '/runtime'
+    if not vim.o.runtimepath:find(project_rtp, 1, true) then
+      vim.opt.runtimepath:prepend(project_rtp)
+    end
+    local build_rtp = cwd .. '/build/lib/nvim'
+    if not vim.o.runtimepath:find(build_rtp, 1, true) then
+      vim.opt.runtimepath:prepend(build_rtp)
+    end
+    vim.treesitter.language.require_language('vim')
+    vim.treesitter.language.require_language('lua')
+    vim.treesitter.start(0, 'vim')
+    local parser = vim.treesitter.get_parser(0, 'vim')
+    parser:parse(true)
+  ]]
 end
-
 before_each(function()
   -- avoid options, but we still need TS parsers
   clear({ args_rm = { '--cmd' }, args = { '--clean', '--cmd', n.runtime_set } })
@@ -55,11 +91,18 @@ describe('commenting', function()
   before_each(function()
     set_lines(example_lines)
     set_commentstring('# %s')
+    ensure_project_runtime()
   end)
 
   describe('toggle_lines()', function()
     local toggle_lines = function(...)
-      exec_lua('require("vim._comment").toggle_lines(...)', ...)
+      exec_lua([[
+        local comment = require('vim._comment')
+        if not vim.g._comment_loaded_source then
+          vim.g._comment_loaded_source = debug.getinfo(comment.toggle_lines).source
+        end
+        comment.toggle_lines(...)
+      ]], ...)
     end
 
     it('works', function()
@@ -256,9 +299,11 @@ describe('commenting', function()
 
       -- Single line comments
       local validate = function(line, ref_output)
+        reset_debug_log()
         set_lines(lines)
         toggle_lines(line, line)
-        eq(get_lines(line - 1, line)[1], ref_output)
+        local actual = get_lines(line - 1, line)[1]
+        eq(actual, ref_output)
       end
 
       validate(1, '"set background=dark')
@@ -270,7 +315,9 @@ describe('commenting', function()
       validate(7, '"EOF')
 
       -- Multiline comments should be computed based on first line 'commentstring'
+      reset_debug_log()
       set_lines(lines)
+      reset_debug_log()
       toggle_lines(1, 3)
       local out_lines = get_lines()
       eq(out_lines[1], '"set background=dark')
@@ -430,6 +477,7 @@ describe('commenting', function()
       feed('.')
       eq(get_lines(), example_lines)
 
+      reset_debug_log()
       set_cursor(3, 0)
       feed('.')
       eq(get_lines(), { 'aa', ' aa', '  # aa', '  #', '  # aa', ' aa', 'aa' })
@@ -465,6 +513,7 @@ describe('commenting', function()
 
       -- Single line comments
       local validate = function(line, ref_output)
+        reset_debug_log()
         set_lines(lines)
         set_cursor(line, 0)
         feed('gc_')
@@ -480,6 +529,8 @@ describe('commenting', function()
       validate(7, '"EOF')
 
       -- Has proper dot-repeat which recomputes 'commentstring'
+      reset_debug_log()
+      reset_debug_log()
       set_lines(lines)
 
       set_cursor(1, 0)
@@ -492,6 +543,7 @@ describe('commenting', function()
 
       -- Multiline comments should be computed based on cursor position
       -- which in case of Visual selection means its left part
+      reset_debug_log()
       set_lines(lines)
       set_cursor(1, 0)
       feed('v2j', 'gc')
@@ -576,6 +628,9 @@ describe('commenting', function()
         'print(1)',
         'EOF',
       }
+      reset_debug_log()
+      reset_debug_log()
+      reset_debug_log()
       set_lines(lines)
 
       set_cursor(1, 0)
@@ -583,6 +638,7 @@ describe('commenting', function()
       eq(get_lines(), { '"set background=dark', 'lua << EOF', 'print(1)', 'EOF' })
 
       -- Should work with dot-repeat
+      reset_debug_log()
       set_cursor(3, 0)
       feed('.')
       eq(get_lines(), { '"set background=dark', 'lua << EOF', '-- print(1)', 'EOF' })
@@ -657,6 +713,7 @@ describe('commenting', function()
       }, get_lines())
 
       -- Should work with dot-repeat
+      reset_debug_log()
       set_cursor(4, 0)
       feed('.')
       eq({
@@ -699,6 +756,7 @@ describe('commenting', function()
       }, get_lines())
 
       -- Should work with dot-repeat
+      reset_debug_log()
       set_cursor(4, 0)
       feed('.')
       eq({
@@ -710,6 +768,7 @@ describe('commenting', function()
         'EOF',
       }, get_lines())
 
+      reset_debug_log()
       set_cursor(3, 0)
       feed('.')
       eq({
@@ -720,6 +779,39 @@ describe('commenting', function()
         ']]',
         'EOF',
       }, get_lines())
+    end)
+
+    it('exposes tree-sitter commentstring metadata through captures', function()
+      exec_lua [=[
+        vim.treesitter.query.set('lua', 'highlights', [[
+          ((string) @string (#set! @string bo.commentstring "; %s"))
+        ]])
+      ]=]
+      setup_treesitter()
+
+      set_lines({
+        'set background=dark',
+        'lua << EOF',
+        'print[[',
+        'Inside string',
+        ']]',
+        'EOF',
+      })
+
+      eq('; %s', exec_lua [=[
+        for _, cap in ipairs(vim.treesitter.get_captures_at_pos(0, 3, 0)) do
+          local md = cap.metadata
+          if md['bo.commentstring'] then
+            return md['bo.commentstring']
+          end
+          local capture_md = md[cap.id]
+          if capture_md and capture_md['bo.commentstring'] then
+            return capture_md['bo.commentstring']
+          end
+        end
+      ]=])
+
+      exec_lua [[vim.treesitter.query.set('lua', 'highlights', nil)]]
     end)
 
     it('works across combined injections #30799', function()
@@ -804,6 +896,7 @@ describe('commenting', function()
         '-- print(2)',
         'EOF',
       }
+      reset_debug_log()
       set_lines(lines)
 
       set_cursor(1, 0)
@@ -811,6 +904,7 @@ describe('commenting', function()
       eq(get_lines(), { 'lua << EOF', '-- print(1)', '-- print(2)', 'EOF' })
 
       -- Should work with dot-repeat
+      reset_debug_log()
       set_cursor(2, 0)
       feed('.')
       eq(get_lines(), { 'lua << EOF', 'EOF' })
