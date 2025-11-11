@@ -112,10 +112,7 @@ function TSHighlighter.new(tree, opts)
   end
 
   tree:register_cbs({
-    on_bytes_batch = function(_, buf, events)
-      if not events or #events == 0 then
-        return
-      end
+    on_bytes = function(buf)
       -- Clear conceal_lines marks whenever the buffer text changes. Marks are added
       -- back as either the _conceal_line or on_win callback comes across them.
       local hl = TSHighlighter.active[buf]

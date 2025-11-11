@@ -36,25 +36,8 @@ function M._create_parser(bufnr, lang, opts)
 
   local self = LanguageTree.new(bufnr, lang, opts)
 
-  local function bytes_cb(_, bufnr0, events)
-    if not events then
-      return
-    end
-    for _, ev in ipairs(events) do
-      self:_on_bytes(
-        bufnr0,
-        ev.changedtick,
-        ev.start_row,
-        ev.start_col,
-        ev.start_byte,
-        ev.old_row,
-        ev.old_col,
-        ev.old_byte,
-        ev.new_row,
-        ev.new_col,
-        ev.new_byte
-      )
-    end
+  local function bytes_cb(_, ...)
+    self:_on_bytes(...)
   end
 
   local function detach_cb(_, ...)
@@ -73,7 +56,7 @@ function M._create_parser(bufnr, lang, opts)
   api.nvim_buf_attach(
     source,
     false,
-    { on_bytes_batch = bytes_cb, on_detach = detach_cb, on_reload = reload_cb, preview = true }
+    { on_bytes = bytes_cb, on_detach = detach_cb, on_reload = reload_cb, preview = true }
   )
 
   return self
