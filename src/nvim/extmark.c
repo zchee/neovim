@@ -47,6 +47,28 @@
 
 #include "extmark.c.generated.h"
 
+static bcount_t extmark_bytecache_get(buf_T *buf, int row)
+{
+  if (row < 0) {
+    return 0;
+  }
+
+  bcount_t byte = 0;
+  if (marktree_bytecache_lookup(buf->b_marktree, row, &byte)) {
+    return byte;
+  }
+
+  byte = ml_find_line_or_offset(buf, row + 1, NULL, true);
+  if (byte < 0 && buf->b_ml.ml_chunksize == NULL) {
+    byte = 0;
+  }
+  if (byte >= 0) {
+    marktree_bytecache_store(buf->b_marktree, row, byte);
+  }
+
+  return byte;
+}
+
 /// Create or update an extmark
 ///
 /// must not be used during iteration!
@@ -481,7 +503,8 @@ void extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
   if (curbuf_splice_pending) {
     return;
   }
-  bcount_t start_byte = ml_find_line_or_offset(buf, line1, NULL, true);
+  int start_row = (int)line1 - 1;
+  bcount_t start_byte = extmark_bytecache_get(buf, start_row);
   bcount_t old_byte = 0;
   bcount_t new_byte = 0;
   int old_row;
@@ -500,11 +523,11 @@ void extmark_adjust(buf_T *buf, linenr_T line1, linenr_T line2, linenr_T amount,
     new_row = (int)amount;
   }
   if (new_row > 0) {
-    new_byte = ml_find_line_or_offset(buf, line1 + new_row, NULL, true)
-               - start_byte;
+    bcount_t end_byte = extmark_bytecache_get(buf, start_row + new_row);
+    new_byte = end_byte - start_byte;
   }
   extmark_splice_impl(buf,
-                      (int)line1 - 1, 0, start_byte,
+                      start_row, 0, start_byte,
                       old_row, 0, old_byte,
                       new_row, 0, new_byte, undo);
 }
@@ -530,24 +553,7 @@ void extmark_splice(buf_T *buf, int start_row, colnr_T start_col, int old_row, c
                     bcount_t old_byte, int new_row, colnr_T new_col, bcount_t new_byte,
                     ExtmarkOp undo)
 {
-  bcount_t start_byte = 0;
-  bool cached = marktree_bytecache_lookup(buf->b_marktree, start_row, &start_byte);
-  if (!cached) {
-    start_byte = ml_find_line_or_offset(buf, start_row + 1, NULL, true);
-
-    // On empty buffers, when editing the first line, the line is buffered,
-    // causing offset to be < 0. While the buffer is not actually empty, the
-    // buffered line has not been flushed (and should not be) yet, so the call is
-    // valid but an edge case.
-    //
-    // TODO(vigoux): maybe there is a better way of testing that ?
-    if (start_byte < 0 && buf->b_ml.ml_chunksize == NULL) {
-      start_byte = 0;
-    }
-    if (start_byte >= 0) {
-      marktree_bytecache_store(buf->b_marktree, start_row, start_byte);
-    }
-  }
+  bcount_t start_byte = extmark_bytecache_get(buf, start_row);
 
   extmark_splice_impl(buf, start_row, start_col, start_byte + start_col,
                       old_row, old_col, old_byte, new_row, new_col, new_byte,
