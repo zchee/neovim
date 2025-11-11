@@ -2293,14 +2293,6 @@ nvim_buf_attach({buffer}, {send_buffer}, {opts})           *nvim_buf_attach()*
                          • new end column of the changed text (if new end row
                            = 0, offset from start column)
                          • new end byte length of the changed text
-                       • on_bytes_batch: Lua callback invoked on change.
-                         Receives a list of change tables with the fields listed
-                         for `on_bytes`, plus a `preview` boolean indicating
-                         whether the edit happened during |cmdpreview|. Return a
-                         truthy value (not `false` or `nil`) to detach. Args:
-                         • the string "bytes"
-                         • buffer id
-                         • array of change tables
                        • on_changedtick: Lua callback invoked on changedtick
                          increment without text change. Args:
                          • the string "changedtick"
