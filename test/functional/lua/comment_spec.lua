@@ -59,7 +59,6 @@ local reset_debug_log = function()
     if vim.g._comment_debug then
       pcall(vim.fn.delete, vim.g._comment_debug)
     end
-    vim.g._comment_debug = '/tmp/comment_debug.log'
   ]]
 end
 
@@ -288,35 +287,24 @@ describe('commenting', function()
     it('respects tree-sitter injections', function()
       setup_treesitter()
 
-    local lines = {
-      'set background=dark',
-      'lua << EOF',
-      'print(1)',
-      'vim.api.nvim_exec2([[',
-      '    set background=light',
-      ']])',
-      'EOF',
-    }
+      local lines = {
+        'set background=dark',
+        'lua << EOF',
+        'print(1)',
+        'vim.api.nvim_exec2([[',
+        '    set background=light',
+        ']])',
+        'EOF',
+      }
 
-    -- Single line comments
-    local validate = function(line, ref_output)
-      reset_debug_log()
-      exec_lua([[vim.g._comment_debug = '/tmp/comment_debug.log']], line)
-      set_lines(lines)
-      toggle_lines(line, line)
-      local actual = get_lines()[line]
-      exec_lua([[
-        if vim.g._comment_debug then
-          local line, actual, expected = ...
-          vim.fn.writefile(
-            {('single_validate\t%d\t%s\t%s'):format(line, actual, expected)},
-            vim.g._comment_debug,
-            'a'
-          )
-        end
-      ]], line, actual, ref_output)
-      eq(actual, ref_output)
-    end
+      -- Single line comments
+      local validate = function(line, ref_output)
+        reset_debug_log()
+        set_lines(lines)
+        toggle_lines(line, line)
+        local actual = get_lines(line - 1, line)[1]
+        eq(actual, ref_output)
+      end
 
       validate(1, '"set background=dark')
       validate(2, '"lua << EOF')
@@ -328,7 +316,6 @@ describe('commenting', function()
 
       -- Multiline comments should be computed based on first line 'commentstring'
       reset_debug_log()
-      exec_lua([[vim.g._comment_debug = '/tmp/comment_debug.log']])
       set_lines(lines)
       reset_debug_log()
       toggle_lines(1, 3)
@@ -436,16 +423,9 @@ describe('commenting', function()
 
   describe('Operator', function()
     it('works in Normal mode', function()
-      reset_debug_log()
       set_cursor(2, 2)
       feed('gc', 'ap')
-      local expected = { '# aa', '#  aa', '#   aa', '#', '  aa', ' aa', 'aa' }
-      exec_lua([[
-        if vim.g._comment_debug then
-          vim.fn.writefile({('operator_expected\t%s'):format(vim.inspect(...))}, vim.g._comment_debug, 'a')
-        end
-      ]], expected)
-      eq(get_lines(), expected)
+      eq(get_lines(), { '# aa', '#  aa', '#   aa', '#', '  aa', ' aa', 'aa' })
       -- Cursor moves to start line
       eq(get_cursor(), { 1, 0 })
 
@@ -533,19 +513,12 @@ describe('commenting', function()
 
       -- Single line comments
       local validate = function(line, ref_output)
-      reset_debug_log()
-      set_lines(lines)
-      set_cursor(line, 0)
-      feed('gc_')
-      local actual = get_lines(line - 1, line)[1]
-      exec_lua([[
-        if vim.g._comment_debug then
-          local line, actual, expected = ...
-          vim.fn.writefile({('single_validate\t%d\t%s\t%s'):format(line, vim.inspect(actual), vim.inspect(expected))}, vim.g._comment_debug, 'a')
-        end
-      ]], line, actual, ref_output)
-      eq(actual, ref_output)
-    end
+        reset_debug_log()
+        set_lines(lines)
+        set_cursor(line, 0)
+        feed('gc_')
+        eq(get_lines(line - 1, line)[1], ref_output)
+      end
 
       validate(1, '"set background=dark')
       validate(2, '"lua << EOF')
@@ -562,25 +535,11 @@ describe('commenting', function()
 
       set_cursor(1, 0)
       feed('gc_')
-      local line1 = get_lines()[1]
-      exec_lua([[
-        if vim.g._comment_debug then
-          local actual, expected = ...
-          vim.fn.writefile({('dot_repeat_initial\t%s\t%s'):format(vim.inspect(actual), vim.inspect(expected))}, vim.g._comment_debug, 'a')
-        end
-      ]], line1, '"set background=dark')
-      eq(line1, '"set background=dark')
+      eq(get_lines()[1], '"set background=dark')
 
       set_cursor(3, 0)
       feed('.')
-      local line3 = get_lines()[3]
-      exec_lua([[
-        if vim.g._comment_debug then
-          local actual, expected = ...
-          vim.fn.writefile({('dot_repeat_result\t%s\t%s'):format(vim.inspect(actual), vim.inspect(expected))}, vim.g._comment_debug, 'a')
-        end
-      ]], line3, '-- print(1)')
-      eq(line3, '-- print(1)')
+      eq(get_lines()[3], '-- print(1)')
 
       -- Multiline comments should be computed based on cursor position
       -- which in case of Visual selection means its left part
@@ -589,16 +548,6 @@ describe('commenting', function()
       set_cursor(1, 0)
       feed('v2j', 'gc')
       local out_lines = get_lines()
-      exec_lua([[
-        if vim.g._comment_debug then
-          local l1, l2, l3 = ...
-          vim.fn.writefile({
-            ('visual_result\t1\t%s'):format(vim.inspect(l1)),
-            ('visual_result\t2\t%s'):format(vim.inspect(l2)),
-            ('visual_result\t3\t%s'):format(vim.inspect(l3)),
-          }, vim.g._comment_debug, 'a')
-        end
-      ]], out_lines[1], out_lines[2], out_lines[3])
       eq(out_lines[1], '"set background=dark')
       eq(out_lines[2], '"lua << EOF')
       eq(out_lines[3], '"print(1)')
@@ -616,24 +565,12 @@ describe('commenting', function()
 
       set_cursor(1, 1)
       feed('gc_')
-      local first_line = get_lines()[1]
-      exec_lua([[
-        if vim.g._comment_debug then
-          vim.fn.writefile({('recompute_initial\t%s'):format(vim.inspect(...))}, vim.g._comment_debug, 'a')
-        end
-      ]], first_line)
-      eq(first_line, '  "print(1)')
+      eq(get_lines()[1], '  "print(1)')
 
       set_lines(lines)
       set_cursor(3, 2)
       feed('.')
-      local third_line = get_lines()[3]
-      exec_lua([[
-        if vim.g._comment_debug then
-          vim.fn.writefile({('recompute_result\t%s'):format(vim.inspect(...))}, vim.g._comment_debug, 'a')
-        end
-      ]], third_line)
-      eq(third_line, '  -- print(1)')
+      eq(get_lines()[3], '  -- print(1)')
     end)
 
     it('preserves marks', function()
@@ -964,27 +901,13 @@ describe('commenting', function()
 
       set_cursor(1, 0)
       feed('dgc')
-      local after_delete = get_lines()
-      exec_lua([[
-        if vim.g._comment_debug then
-          local state = ...
-          vim.fn.writefile({ 'textobject_after_dgc\t' .. vim.inspect(state) }, vim.g._comment_debug, 'a')
-        end
-      ]], after_delete)
-      eq(after_delete, { 'lua << EOF', '-- print(1)', '-- print(2)', 'EOF' })
+      eq(get_lines(), { 'lua << EOF', '-- print(1)', '-- print(2)', 'EOF' })
 
       -- Should work with dot-repeat
       reset_debug_log()
       set_cursor(2, 0)
       feed('.')
-      local after_repeat = get_lines()
-      exec_lua([[
-        if vim.g._comment_debug then
-          local state = ...
-          vim.fn.writefile({ 'textobject_after_repeat\t' .. vim.inspect(state) }, vim.g._comment_debug, 'a')
-        end
-      ]], after_repeat)
-      eq(after_repeat, { 'lua << EOF', 'EOF' })
+      eq(get_lines(), { 'lua << EOF', 'EOF' })
     end)
   end)
 end)
