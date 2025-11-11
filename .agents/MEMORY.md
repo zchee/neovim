@@ -23,3 +23,7 @@
 18. Summarize results and implications for user, including performance considerations unlocked by fixes.
 19. Assess next directions for overall performance investigation per original request.
 20. Prepare for transition to subsequent tasks or follow-up queries once comment issue resolved.
+
+# Notes
+- Reverted commits `bd6dde201372`, `d1e23377e14f`, and `c4f478a1fc22` (`feat(api): add batched buffer byte updates` and related commentstring fixes) after regression in "add batched buffer byte updates"; branch `optimize` now includes three corresponding revert commits.
+    - Additionally restored `test/functional/treesitter/utils_spec.lua` to its pre-`84754715cfa2` state after confirming tree-sitter utility tests pass with the adjusted `_range.add_bytes` fix.
