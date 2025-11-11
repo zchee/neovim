@@ -47,4 +47,23 @@ describe('treesitter utils', function()
     -- End column exclusive
     eq(false, exec_lua('return vim.treesitter.is_in_node_range(node, 0, 8)'))
   end)
+
+  it('adds byte offsets to ranges ending on following line', function()
+    insert([=[print(1)
+print(2)]=])
+
+    eq({ 0, 0, 0, 1, 0, 9 }, exec_lua([[
+      return vim.treesitter._range.add_bytes(0, { 0, 0, 1, 0 })
+    ]]))
+
+    eq({ 0, 0, 0, 2, 0, 18 }, exec_lua([[
+      return vim.treesitter._range.add_bytes(0, { 0, 0, 2, 0 })
+    ]]))
+
+    local text = 'print(1)\nprint(2)'
+    eq({ 0, 0, 0, 2, 0, #text }, exec_lua([[
+      local text = ...
+      return vim.treesitter._range.add_bytes(text, { 0, 0, 2, 0 })
+    ]], text))
+  end)
 end)

@@ -718,4 +718,22 @@ describe('marktree byte cache', function()
     eq(55, new_value)
     eq(false, select(1, lookup(tree, 5)))
   end)
+
+  itp('handles multi-line replacements by updating cached successors', function()
+    local tree = new_marktree()
+    lib.marktree_bytecache_store(tree, 0, 0)
+    lib.marktree_bytecache_store(tree, 1, 8)
+    lib.marktree_bytecache_store(tree, 2, 18)
+    lib.marktree_bytecache_store(tree, 4, 50)
+
+    -- Replace two lines with three, adding 15 bytes in total.
+    lib.marktree_bytecache_apply_splice(tree, 1, 2, 3, 25, 40)
+
+    eq(false, select(1, lookup(tree, 1)))
+    eq(false, select(1, lookup(tree, 2)))
+
+    local ok_lookup, shifted = lookup(tree, 5)
+    eq(true, ok_lookup)
+    eq(65, shifted)
+  end)
 end)
