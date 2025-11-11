@@ -24,6 +24,84 @@ local ft_runtime_templates = {
 
 local ft_commentstring_cache = {} ---@type table<string,string|false>
 local lang_commentstring_cache = {} ---@type table<string,string|false>
+local parser_lang_cache = {} ---@type table<integer,string>
+
+local function get_or_start_parser()
+  local buf = vim.api.nvim_get_current_buf()
+  local parser = vim.treesitter.get_parser(buf, '', { error = false })
+  if parser then
+    local lang = parser:lang() or parser_lang_cache[buf] or vim.bo.filetype
+    parser_lang_cache[buf] = lang
+    if lang then
+      vim.b[[_comment_last_lang]] = lang
+    end
+    debug_log('parser_existing', buf, lang or 'nil')
+    return parser
+  end
+
+  local tried = {}
+  local function try_start(lang)
+    if not lang or lang == '' or tried[lang] then
+      return nil
+    end
+    tried[lang] = true
+    local ok = pcall(vim.treesitter.start, buf, lang)
+    if not ok then
+      debug_log('parser_start_failed', buf, lang)
+      return nil
+    end
+    local new_parser = vim.treesitter.get_parser(buf, '', { error = false })
+    if new_parser then
+      local detected = new_parser:lang() or lang
+      parser_lang_cache[buf] = detected
+      if detected then
+        vim.b[[_comment_last_lang]] = detected
+      end
+      debug_log('parser_started', buf, detected or 'nil')
+    end
+    return new_parser
+  end
+
+  local ft = vim.bo.filetype
+  parser = try_start(ft)
+  if parser then
+    return parser
+  end
+
+  local cached_lang = parser_lang_cache[buf] or vim.b._comment_last_lang
+  if cached_lang and cached_lang ~= ft then
+    parser = try_start(cached_lang)
+    if parser then
+      return parser
+    end
+  end
+
+  return nil
+end
+
+local function refresh_parser_range(start_row, end_row)
+  if not vim.g._comment_debug then
+    vim.g._comment_debug = '/tmp/comment_debug.log'
+  end
+  local ts_parser = get_or_start_parser()
+  if not ts_parser then
+    debug_log('parser_missing', start_row, end_row, vim.bo.filetype or '', parser_lang_cache[vim.api.nvim_get_current_buf()] or '')
+    return
+  end
+
+  local ok_invalidate = pcall(ts_parser.invalidate, ts_parser)
+  if not ok_invalidate then
+    return
+  end
+
+  local start = math.max(start_row, 0)
+  local stop = math.max(end_row, start)
+  local range = { start, 0, stop + 1, 0 }
+  debug_log('refresh_parser_range', start, stop)
+  ts_parser:parse(range)
+  vim.wait(0)
+  ts_parser:parse(range)
+end
 
 local function load_filetype_commentstring(ft)
   local cached = ft_commentstring_cache[ft]
@@ -90,12 +168,19 @@ local function commentstring_for_lang(lang)
   return nil
 end
 
-local function injection_commentstring(lang_tree, ref_range6)
+local function injection_commentstring(lang_tree, ref_range6, row, root_parser)
   if not lang_tree._injection_query then
     return nil
   end
 
   local ok_all, all_injections = pcall(lang_tree._get_injections, lang_tree, true, {})
+  if (not ok_all or not all_injections or not next(all_injections)) and lang_tree == root_parser then
+    root_parser:invalidate(true)
+    root_parser:parse(true)
+    vim.wait(0)
+    root_parser:parse(true)
+    ok_all, all_injections = pcall(lang_tree._get_injections, lang_tree, true, {})
+  end
   if not ok_all or not all_injections then
     all_injections = nil
   end
@@ -103,6 +188,7 @@ local function injection_commentstring(lang_tree, ref_range6)
   if all_injections then
     if next(all_injections) then
       pcall(lang_tree._add_injections, lang_tree, all_injections)
+      root_parser:parse(true)
     end
     for lang, regions in pairs(all_injections) do
       if lang and regions then
@@ -132,6 +218,57 @@ local function injection_commentstring(lang_tree, ref_range6)
     end
   end
 
+  if lang_tree == root_parser then
+    local buf = vim.api.nvim_get_current_buf()
+    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    local line_count = #lines
+    local current = row + 1
+    local start
+    for r = current, 1, -1 do
+      local text = lines[r]
+      if text and text:match('^%s*lua%s*<<%s*EOF') then
+        start = r
+        break
+      elseif text and text:match('^%s*EOF%s*$') then
+        break
+      end
+    end
+    if start then
+      local open_long_string = 0
+      for r = start, current - 1 do
+        local text = lines[r]
+        if text then
+          local opens = select(2, text:gsub('%[%[', ''))
+          local closes = select(2, text:gsub('%]%]', ''))
+          open_long_string = open_long_string + opens - closes
+        end
+      end
+      local current_text = lines[current] or ''
+      local current_opens = select(2, current_text:gsub('%[%[', ''))
+      local current_closes = select(2, current_text:gsub('%]%]', ''))
+      local open_after_current = open_long_string + current_opens - current_closes
+      if open_long_string > 0 and open_after_current > 0 then
+        return nil
+      end
+      for r = current, line_count do
+        local text = lines[r]
+        if text and text:match('^%s*EOF%s*$') then
+          if open_long_string <= 0 then
+            return '-- %s'
+          else
+            break
+          end
+        elseif text and text:match('^%s*lua%s*<<%s*EOF') then
+          break
+        elseif text then
+          local opens = select(2, text:gsub('%[%[', ''))
+          local closes = select(2, text:gsub('%]%]', ''))
+          open_long_string = open_long_string + opens - closes
+        end
+      end
+    end
+  end
+
   return nil
 end
 
@@ -145,17 +282,36 @@ end
 local function get_commentstring(ref_position)
   local buf_cs = vim.bo.commentstring
 
+  local row, col = ref_position[1] - 1, ref_position[2]
+  local function ret(cs)
+    debug_log('get_commentstring_result', row, col, cs or 'nil')
+    return cs
+  end
+
   local ts_parser = vim.treesitter.get_parser(0, '', { error = false })
   if not ts_parser then
-    return buf_cs
+    ts_parser = get_or_start_parser()
+  end
+  if not ts_parser then
+    return ret(buf_cs)
   end
 
   -- Try to get 'commentstring' associated with local tree-sitter language.
   -- This is useful for injected languages (like markdown with code blocks).
-  local row, col = ref_position[1] - 1, ref_position[2]
   local ref_range = { row, col, row, col + 1 }
+  local refreshed = false
+  local function refresh_parser()
+    if refreshed then
+      return false
+    end
+    refreshed = true
+    ts_parser:invalidate(true)
+    ts_parser:parse(true)
+    vim.wait(0)
+    ts_parser:parse(true)
+    return true
+  end
 
-  ts_parser:invalidate(true)
   ts_parser:parse(true)
 
   local ref_range6 = range_mod.add_bytes(0, ref_range)
@@ -193,14 +349,29 @@ local function get_commentstring(ref_position)
 
   -- Get 'commentstring' from tree-sitter captures' metadata.
   -- Traverse backwards to prefer narrower captures.
-  local caps = vim.treesitter.get_captures_at_pos(0, row, col)
-  for i = #caps, 1, -1 do
-    local id, metadata = caps[i].id, caps[i].metadata
-    local md_cms = metadata['bo.commentstring'] or metadata[id] and metadata[id]['bo.commentstring']
-
-    if md_cms then
-      return md_cms
+  local function capture_commentstring(caps)
+    for i = #caps, 1, -1 do
+      local id, metadata = caps[i].id, caps[i].metadata
+      local capture_name = caps[i].capture or ''
+      local md_cms = metadata['bo.commentstring'] or metadata[id] and metadata[id]['bo.commentstring']
+      debug_log('capture_candidate', row, col, capture_name, md_cms)
+      if md_cms and capture_name ~= '_src' then
+        debug_log('capture_return', row, col, md_cms)
+        return ret(md_cms)
+      end
     end
+    return nil
+  end
+
+  local caps = vim.treesitter.get_captures_at_pos(0, row, col)
+  local caps_cs = capture_commentstring(caps)
+  if not caps_cs and refresh_parser() then
+    caps = vim.treesitter.get_captures_at_pos(0, row, col)
+    debug_log('capture_refresh', row, col, #caps)
+    caps_cs = capture_commentstring(caps)
+  end
+  if caps_cs then
+    return caps_cs
   end
 
   local function commentstring_from_highlight(lang_tree)
@@ -214,15 +385,18 @@ local function get_commentstring(ref_position)
     for _, tree in pairs(lang_tree:trees()) do
       local root = tree:root()
       for capture_id, node, metadata in query:iter_captures(root, source, row, row + 1) do
-        local md = metadata and (metadata['bo.commentstring']
-          or metadata[capture_id] and metadata[capture_id]['bo.commentstring'])
-        if md then
-          local capture_range = vim.treesitter.get_range(node, source, metadata and metadata[capture_id])
-          if capture_range and range_mod.contains(capture_range, ref_range6) then
-            if not best_range or range_mod.contains(best_range, capture_range) then
-              best_cs = md
-              best_range = capture_range
-              debug_log('highlight_candidate', lang_tree:lang(), capture_id, vim.inspect(capture_range), md)
+        local capture_name = query.captures and query.captures[capture_id] or ''
+        if capture_name ~= '_src' then
+          local md = metadata and (metadata['bo.commentstring']
+            or metadata[capture_id] and metadata[capture_id]['bo.commentstring'])
+          if md then
+            local capture_range = vim.treesitter.get_range(node, source, metadata and metadata[capture_id])
+            if capture_range and range_mod.contains(capture_range, ref_range6) then
+              if not best_range or range_mod.contains(best_range, capture_range) then
+                best_cs = md
+                best_range = capture_range
+      debug_log('highlight_candidate', lang_tree:lang(), capture_id, vim.inspect(capture_range), md)
+              end
             end
           end
         end
@@ -254,14 +428,48 @@ local function get_commentstring(ref_position)
   local lang_tree = best_lang_tree or deepest_lang_tree(ts_parser)
 
   if lang_tree == ts_parser then
-    local inj_cs = injection_commentstring(ts_parser, ref_range6)
+    local inj_cs = injection_commentstring(ts_parser, ref_range6, row, ts_parser)
     if inj_cs and inj_cs ~= '' then
-      return inj_cs
+      return ret(inj_cs)
     end
   end
 
   if not lang_tree then
-    return buf_cs
+    local buf = vim.api.nvim_get_current_buf()
+    local function detect_lua_heredoc()
+      local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      local line_count = #lines
+      local current = row + 1
+      local start
+      for r = current, 1, -1 do
+        local text = lines[r]
+        if text and text:match('^%s*lua%s*<<%s*EOF') then
+          start = r
+          break
+        elseif text and text:match('^%s*EOF%s*$') then
+          break
+        end
+      end
+      if not start then
+        return nil
+      end
+      for r = current, line_count do
+        local text = lines[r]
+        if text and text:match('^%s*EOF%s*$') then
+          return '-- %s'
+        elseif text and text:match('^%s*lua%s*<<%s*EOF') then
+          break
+        end
+      end
+      return nil
+    end
+
+    local heredoc_cs = detect_lua_heredoc()
+    if heredoc_cs then
+      return heredoc_cs
+    end
+
+    return ret(buf_cs)
   end
 
   local seen_langs = {}
@@ -269,21 +477,26 @@ local function get_commentstring(ref_position)
     seen_langs[#seen_langs + 1] = lang_tree:lang()
 
     local hl_cs = commentstring_from_highlight(lang_tree)
+    if (hl_cs == nil or hl_cs == '') and refresh_parser() then
+      debug_log('highlight_refresh', lang_tree:lang(), row, col)
+      hl_cs = commentstring_from_highlight(lang_tree)
+    end
     if hl_cs and hl_cs ~= '' then
-      return hl_cs
+      debug_log('highlight_return', lang_tree:lang(), row, col, hl_cs)
+      return ret(hl_cs)
     end
 
     local cs = commentstring_for_lang(lang_tree:lang())
     if cs and cs ~= '' then
       debug_log('ft_return', lang_tree:lang(), cs)
-      return cs
+      return ret(cs)
     end
 
     lang_tree = lang_tree:parent()
   end
 
   debug_log('fallback_buf', row, col, buf_cs)
-  return buf_cs
+  return ret(buf_cs)
 end
 
 --- Compute comment parts from 'commentstring'
@@ -318,7 +531,9 @@ local function make_comment_check(parts)
   local regex = '^%s-' .. vim.trim(l_esc) .. '.*' .. vim.trim(r_esc) .. '%s-$'
 
   return function(line)
-    return line:find(regex) ~= nil
+    local matched = line:find(regex) ~= nil
+    debug_log('comment_check', line, parts.left, parts.right, regex, matched)
+    return matched
   end
 end
 
@@ -335,7 +550,7 @@ local function get_lines_info(lines, parts)
   ---@type string
   local indent
 
-  for _, l in ipairs(lines) do
+  for idx, l in ipairs(lines) do
     -- Update lines indent: minimum of all indents except blank lines
     local _, indent_width_cur, indent_cur = l:find('^(%s*)')
     assert(indent_width_cur and indent_cur)
@@ -350,13 +565,16 @@ local function get_lines_info(lines, parts)
       end
 
       -- Update comment info: commented if every non-blank line is commented
+      local commented = comment_check(l)
+      debug_log('line_check', idx, l, commented, parts.left, parts.right)
       if is_commented then
-        is_commented = comment_check(l)
+        is_commented = commented
       end
     end
   end
 
   -- `indent` can still be `nil` in case all `lines` are empty
+  debug_log('lines_info', indent or '', is_commented)
   return indent or '', is_commented
 end
 
@@ -379,7 +597,9 @@ local function make_comment_function(parts, indent)
     if is_blank(line) then
       return blank_comment
     end
-    return prefix .. line:sub(nonindent_start) .. suffix
+    local result = prefix .. line:sub(nonindent_start) .. suffix
+    debug_log('comment_apply', line, result, prefix, suffix, nonindent_start)
+    return result
   end
 end
 
@@ -455,15 +675,6 @@ local function toggle_lines(line_start, line_end, ref_position)
     per_line_parts[idx] = cache_parts(parts)
   end
 
-  if #lines > 1 and per_line_parts[1] then
-    local shared_parts = per_line_parts[1]
-    for idx = 2, #per_line_parts do
-      local parts = per_line_parts[idx]
-      if parts.left ~= shared_parts.left or parts.right ~= shared_parts.right then
-        per_line_parts[idx] = shared_parts
-      end
-    end
-  end
   local function same_parts(a, b)
     return a.left == b.left and a.right == b.right
   end
@@ -495,6 +706,7 @@ local function toggle_lines(line_start, line_end, ref_position)
     i = j + 1
   end
 
+  debug_log('toggle_result', line_start, line_end, table.concat(new_lines, '\\n'))
   vim._with({ lockmarks = true }, function()
     vim.api.nvim_buf_set_lines(0, line_start - 1, line_end, false, new_lines)
   end)
@@ -529,6 +741,9 @@ local function operator(mode)
   -- dot-repeat. Use the start of the operator range so Visual selections pick
   -- the left-most language region.
   local ref_col = math.max(col_from - 1, 0)
+  local start_row = math.max(lnum_from - 1, 0)
+  local end_row = math.max(lnum_to - 1, start_row)
+  refresh_parser_range(start_row, end_row)
   debug_log('operator_start', lnum_from, lnum_to, ref_col)
   toggle_lines(lnum_from, lnum_to, { lnum_from, ref_col })
   debug_log('operator_end', lnum_from, lnum_to)
