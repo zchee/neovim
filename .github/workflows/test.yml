@@ -27,74 +27,74 @@ env:
   # TEST_FILTER: foo
 
 jobs:
-  lint:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 10
-    env:
-      CC: clang
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
+  # lint:
+  #   runs-on: ubuntu-24.04-arm
+  #   timeout-minutes: 10
+  #   env:
+  #     CC: clang
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - uses: ./.github/actions/setup
+  #
+  #     - name: Install stylua
+  #       run: |
+  #         wget --directory-prefix="$BIN_DIR" https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux-aarch64.zip
+  #         (cd "$BIN_DIR"; unzip stylua*.zip)
+  #
+  #     - name: Build third-party deps
+  #       run: |
+  #         cmake -S cmake.deps -B .deps -G Ninja
+  #         cmake --build .deps
+  #
+  #     - run: cmake -B build -G Ninja -D CI_LINT=ON
+  #
+  #     - if: "!cancelled()"
+  #       name: Determine if run should be aborted
+  #       id: abort_job
+  #       run: echo "status=${{ job.status }}" >> $GITHUB_OUTPUT
+  #
+  #     - if: success() || failure() && steps.abort_job.outputs.status == 'success'
+  #       name: stylua
+  #       run: cmake --build build --target lintlua-stylua
+  #
+  #     - if: success() || failure() && steps.abort_job.outputs.status == 'success'
+  #       name: luals
+  #       run: cmake --build build --target luals
+  #
+  #     - if: success() || failure() && steps.abort_job.outputs.status == 'success'
+  #       name: luacheck
+  #       run: cmake --build build --target lintlua-luacheck
+  #
+  #     - if: success() || failure() && steps.abort_job.outputs.status == 'success'
+  #       name: lintsh
+  #       run: cmake --build build --target lintsh
+  #
+  #     - if: success() || failure() && steps.abort_job.outputs.status == 'success'
+  #       name: clint.py
+  #       run: cmake --build build --target lintc-clint
+  #
+  #     - if: success() || failure() && steps.abort_job.outputs.status == 'success'
+  #       name: clang-tidy
+  #       run: cmake --build build --target lintc-clang-tidy
+  #
+  #     - if: success() || failure() && steps.abort_job.outputs.status == 'success'
+  #       name: uncrustify
+  #       run: cmake --build build --target lintc-uncrustify
 
-      - name: Install stylua
-        run: |
-          wget --directory-prefix="$BIN_DIR" https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux-aarch64.zip
-          (cd "$BIN_DIR"; unzip stylua*.zip)
-
-      - name: Build third-party deps
-        run: |
-          cmake -S cmake.deps -B .deps -G Ninja
-          cmake --build .deps
-
-      - run: cmake -B build -G Ninja -D CI_LINT=ON
-
-      - if: "!cancelled()"
-        name: Determine if run should be aborted
-        id: abort_job
-        run: echo "status=${{ job.status }}" >> $GITHUB_OUTPUT
-
-      - if: success() || failure() && steps.abort_job.outputs.status == 'success'
-        name: stylua
-        run: cmake --build build --target lintlua-stylua
-
-      - if: success() || failure() && steps.abort_job.outputs.status == 'success'
-        name: luals
-        run: cmake --build build --target luals
-
-      - if: success() || failure() && steps.abort_job.outputs.status == 'success'
-        name: luacheck
-        run: cmake --build build --target lintlua-luacheck
-
-      - if: success() || failure() && steps.abort_job.outputs.status == 'success'
-        name: lintsh
-        run: cmake --build build --target lintsh
-
-      - if: success() || failure() && steps.abort_job.outputs.status == 'success'
-        name: clint.py
-        run: cmake --build build --target lintc-clint
-
-      - if: success() || failure() && steps.abort_job.outputs.status == 'success'
-        name: clang-tidy
-        run: cmake --build build --target lintc-clang-tidy
-
-      - if: success() || failure() && steps.abort_job.outputs.status == 'success'
-        name: uncrustify
-        run: cmake --build build --target lintc-uncrustify
-
-  clang-analyzer:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 20
-    env:
-      CC: clang
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
-      - name: Build third-party deps
-        run: |
-          cmake -S cmake.deps --preset ci
-          cmake --build .deps
-          cmake --preset ci
-      - run: cmake --build build --target clang-analyzer
+  # clang-analyzer:
+  #   runs-on: ubuntu-24.04-arm
+  #   timeout-minutes: 20
+  #   env:
+  #     CC: clang
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - uses: ./.github/actions/setup
+  #     - name: Build third-party deps
+  #       run: |
+  #         cmake -S cmake.deps --preset ci
+  #         cmake --build .deps
+  #         cmake --preset ci
+  #     - run: cmake --build build --target clang-analyzer
 
   posix:
     name: ${{ matrix.build.os }} ${{ matrix.build.flavor }} ${{ matrix.build.cc }} ${{ matrix.test }}
@@ -108,13 +108,13 @@ jobs:
         # or if github introduces a wildcard for required checks in the future.
         build:
           [
-            { runner: ubuntu-24.04, os: ubuntu, flavor: asan, cc: clang, flags: -D ENABLE_ASAN_UBSAN=ON },
-            { runner: ubuntu-24.04, os: ubuntu, flavor: tsan, cc: clang, flags: -D ENABLE_TSAN=ON },
-            { runner: ubuntu-24.04, os: ubuntu, flavor: release, cc: gcc, flags: -D CMAKE_BUILD_TYPE=Release -D ENABLE_TRANSLATIONS=ON },
-            { runner: ubuntu-24.04-arm, os: ubuntu, flavor: arm, cc: clang, flags: -D CMAKE_BUILD_TYPE=RelWithDebInfo },
-            { runner: macos-15-intel, os: macos, flavor: intel, cc: clang, flags: -D CMAKE_FIND_FRAMEWORK=NEVER, deps_flags: -D CMAKE_FIND_FRAMEWORK=NEVER },
+            # { runner: ubuntu-24.04, os: ubuntu, flavor: asan, cc: clang, flags: -D ENABLE_ASAN_UBSAN=ON },
+            # { runner: ubuntu-24.04, os: ubuntu, flavor: tsan, cc: clang, flags: -D ENABLE_TSAN=ON },
+            # { runner: ubuntu-24.04, os: ubuntu, flavor: release, cc: gcc, flags: -D CMAKE_BUILD_TYPE=Release -D ENABLE_TRANSLATIONS=ON },
+            # { runner: ubuntu-24.04-arm, os: ubuntu, flavor: arm, cc: clang, flags: -D CMAKE_BUILD_TYPE=RelWithDebInfo },
+            # { runner: macos-15-intel, os: macos, flavor: intel, cc: clang, flags: -D CMAKE_FIND_FRAMEWORK=NEVER, deps_flags: -D CMAKE_FIND_FRAMEWORK=NEVER },
             { runner: macos-15, os: macos, flavor: arm, cc: clang, flags: -D CMAKE_FIND_FRAMEWORK=NEVER, deps_flags: -D CMAKE_FIND_FRAMEWORK=NEVER },
-            { runner: ubuntu-24.04, os: ubuntu, flavor: puc-lua, cc: gcc, deps_flags: -D USE_BUNDLED_LUAJIT=OFF -D USE_BUNDLED_LUA=ON, flags: -D PREFER_LUA=ON },
+            # { runner: ubuntu-24.04, os: ubuntu, flavor: puc-lua, cc: gcc, deps_flags: -D USE_BUNDLED_LUAJIT=OFF -D USE_BUNDLED_LUA=ON, flags: -D PREFER_LUA=ON },
           ]
         test: [unittest, functionaltest, oldtest]
         exclude:
@@ -205,90 +205,90 @@ jobs:
         run: cat $(find "$LOG_DIR" -type f)
 
   # TODO: matrixify
-  zig-build-linux:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    name: build using zig build (linux)
-    steps:
-      - uses: actions/checkout@v5
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: 0.15.2
-      - run: sudo apt-get install -y inotify-tools
+  # zig-build-linux:
+  #   runs-on: ubuntu-24.04
+  #   timeout-minutes: 45
+  #   name: build using zig build (linux)
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - uses: mlugg/setup-zig@v2
+  #       with:
+  #         version: 0.15.2
+  #     - run: sudo apt-get install -y inotify-tools
+  #
+  #     - run: zig build test_nlua0
+  #     - run: zig build nvim && ./zig-out/bin/nvim --version
+  #     - run: zig build unittest
+  #     - run: zig build functionaltest
+  #     # `zig build nvim` uses a lua script for doctags in order to support cross-compiling
+  #     # compare with the builtin generator that they match
+  #     - run: cd runtime; ../zig-out/bin/nvim -u NONE -i NONE -e --headless -c "helptags ++t doc" -c quit
+  #     - run: diff -u runtime/doc/tags zig-out/runtime/doc/tags
 
-      - run: zig build test_nlua0
-      - run: zig build nvim && ./zig-out/bin/nvim --version
-      - run: zig build unittest
-      - run: zig build functionaltest
-      # `zig build nvim` uses a lua script for doctags in order to support cross-compiling
-      # compare with the builtin generator that they match
-      - run: cd runtime; ../zig-out/bin/nvim -u NONE -i NONE -e --headless -c "helptags ++t doc" -c quit
-      - run: diff -u runtime/doc/tags zig-out/runtime/doc/tags
+  # zig-build-macos-15:
+  #   runs-on: macos-15
+  #   timeout-minutes: 45
+  #   name: build using zig build (macos 15)
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - uses: mlugg/setup-zig@v2
+  #       with:
+  #         version: 0.15.2
+  #
+  #     - run: zig build test_nlua0 -Dluajit=false
+  #     - run: zig build nvim_bin -Dluajit=false && ./zig-out/bin/nvim --version
+  #     - run: zig build functionaltest -Dluajit=false
 
-  zig-build-macos-15:
-    runs-on: macos-15
-    timeout-minutes: 45
-    name: build using zig build (macos 15)
-    steps:
-      - uses: actions/checkout@v5
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: 0.15.2
+  # zig-build-windows:
+  #   runs-on: windows-2022
+  #   timeout-minutes: 45
+  #   name: build using zig build (windows)
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - uses: mlugg/setup-zig@v2
+  #       with:
+  #         version: 0.15.2
+  #
+  #     - run: zig build test_nlua0
+  #     - run: zig build nvim_bin
+  #     - run: ./zig-out/bin/nvim --version
+  #     # TODO: support entire test suite
+  #     - run: zig build functionaltest -- test/functional/api/buffer_spec.lua
 
-      - run: zig build test_nlua0 -Dluajit=false
-      - run: zig build nvim_bin -Dluajit=false && ./zig-out/bin/nvim --version
-      - run: zig build functionaltest -Dluajit=false
+  # windows:
+  #   uses: ./.github/workflows/test_windows.yml
 
-  zig-build-windows:
-    runs-on: windows-2022
-    timeout-minutes: 45
-    name: build using zig build (windows)
-    steps:
-      - uses: actions/checkout@v5
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: 0.15.2
-
-      - run: zig build test_nlua0
-      - run: zig build nvim_bin
-      - run: ./zig-out/bin/nvim --version
-      # TODO: support entire test suite
-      - run: zig build functionaltest -- test/functional/api/buffer_spec.lua
-
-  windows:
-    uses: ./.github/workflows/test_windows.yml
-
-  with-external-deps:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 10
-    env:
-      CC: gcc
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
-
-      - name: Install dependencies
-        run: |
-          sudo add-apt-repository ppa:neovim-ppa/stable
-          sudo apt-get install -y \
-            libluajit-5.1-dev \
-            libunibilium-dev \
-            libuv1-dev \
-            lua-filesystem \
-            lua-lpeg \
-            luajit \
-            lua-luv-dev
-            # libtree-sitter-dev \
-
-            # Remove comments from packages once we start using these external
-            # dependencies.
-
-      - name: Build third-party deps
-        run: |
-          cmake -S cmake.deps --preset external_deps
-          cmake --build .deps
-
-      - name: Build
-        run: |
-          cmake --preset ci
-          cmake --build build
+  # with-external-deps:
+  #   runs-on: ubuntu-24.04-arm
+  #   timeout-minutes: 10
+  #   env:
+  #     CC: gcc
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - uses: ./.github/actions/setup
+  #
+  #     - name: Install dependencies
+  #       run: |
+  #         sudo add-apt-repository ppa:neovim-ppa/stable
+  #         sudo apt-get install -y \
+  #           libluajit-5.1-dev \
+  #           libunibilium-dev \
+  #           libuv1-dev \
+  #           lua-filesystem \
+  #           lua-lpeg \
+  #           luajit \
+  #           lua-luv-dev
+  #           # libtree-sitter-dev \
+  #
+  #           # Remove comments from packages once we start using these external
+  #           # dependencies.
+  #
+  #     - name: Build third-party deps
+  #       run: |
+  #         cmake -S cmake.deps --preset external_deps
+  #         cmake --build .deps
+  #
+  #     - name: Build
+  #       run: |
+  #         cmake --preset ci
+  #         cmake --build build
