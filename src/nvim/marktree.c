@@ -152,20 +152,20 @@ void marktree_bytecache_apply_splice(MarkTree *b, int start_row, int old_row, in
     if (line_shift == 0) {
       if (byte_shift != 0 && line > affected_end_row) {
         kv_push(moves, ((ByteCacheMove){
-                          .old_line = line,
-                          .new_line = line,
-                          .new_value = value + byte_shift,
-                        }));
+          .old_line = line,
+          .new_line = line,
+          .new_value = value + byte_shift,
+        }));
       }
       continue;
     }
 
     if (line > affected_end_row) {
       kv_push(moves, ((ByteCacheMove){
-                        .old_line = line,
-                        .new_line = line + line_shift,
-                        .new_value = value + byte_shift,
-                      }));
+        .old_line = line,
+        .new_line = line + line_shift,
+        .new_value = value + byte_shift,
+      }));
     }
   });
 

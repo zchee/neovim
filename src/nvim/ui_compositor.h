@@ -26,10 +26,14 @@ typedef struct {
   uint64_t fallback_external_calls;
   uint64_t overlay_prune_calls;
   uint64_t overlay_prune_width_total;
+  uint64_t overlay_skip_calls;
+  uint64_t overlay_skip_rows;
 } UICompMetrics;
 
 void ui_comp_metrics_snapshot(UICompMetrics *out);
 void ui_comp_metrics_reset(void);
 Array ui_comp_collect_overlay_spans(int row, int startcol, int endcol, Arena *arena);
+void ui_comp_grid_mark_dirty(ScreenGrid *grid, int row);
+void ui_comp_grid_mark_all_dirty(ScreenGrid *grid);
 
 #include "ui_compositor.h.generated.h"

@@ -1779,6 +1779,8 @@ Dict nvim__stats(Arena *arena)
   PUT_C(comp, "overlay_prune_calls", INTEGER_OBJ((Integer)comp_metrics.overlay_prune_calls));
   PUT_C(comp, "overlay_prune_width_total",
         INTEGER_OBJ((Integer)comp_metrics.overlay_prune_width_total));
+  PUT_C(comp, "overlay_skip_calls", INTEGER_OBJ((Integer)comp_metrics.overlay_skip_calls));
+  PUT_C(comp, "overlay_skip_rows", INTEGER_OBJ((Integer)comp_metrics.overlay_skip_rows));
   PUT_C(rv, "ui_comp_scroll_fallback", DICT_OBJ(comp));
   return rv;
 }
