@@ -245,6 +245,34 @@ local function cimport(...)
         end
       end
       body = formatc(body)
+      if string.find(path, 'grid_defs.h', 1, true) then
+        local replacement = table.concat({
+          'struct ScreenGrid {',
+          ' handle_T handle;',
+          ' schar_T *chars;',
+          ' sattr_T *attrs;',
+          ' colnr_T *vcols;',
+          ' size_t *line_offset;',
+          ' int *dirty_col;',
+          ' int rows;',
+          ' int cols;',
+          ' uint8_t *comp_row_dirty;',
+          ' _Bool valid;',
+          ' _Bool throttled;',
+          ' _Bool blending;',
+          ' _Bool mouse_enabled;',
+          ' int zindex;',
+          ' int comp_row;',
+          ' int comp_col;',
+          ' int comp_width;',
+          ' int comp_height;',
+          ' size_t comp_index;',
+          ' _Bool comp_disabled;',
+          ' _Bool pending_comp_index_update;',
+          ' };',
+        })
+        body = body:gsub('struct ScreenGrid {.-; };', replacement, 1)
+      end
       body = filter_complex_blocks(body)
       -- add the formatted lines to a set
       local new_cdefs = Set:new()

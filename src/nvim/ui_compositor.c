@@ -62,9 +62,46 @@ static UICompMetrics ui_comp_metrics;
 typedef struct {
   int start;
   int end;
+  ScreenGrid *grid;
 } OverlaySpan;
 
 static kvec_t(OverlaySpan) overlay_row_spans = KV_INITIAL_VALUE;
+
+void ui_comp_grid_mark_dirty(ScreenGrid *grid, int row)
+{
+#ifdef UNIT_TESTING
+  return;
+#endif
+  if (grid == NULL || grid == &default_grid) {
+    return;
+  }
+  if (grid->comp_row_dirty == NULL) {
+    if (grid->rows <= 0) {
+      return;
+    }
+    grid->comp_row_dirty = xcalloc((size_t)grid->rows, sizeof(*grid->comp_row_dirty));
+  }
+  if (row >= 0 && row < grid->rows) {
+    grid->comp_row_dirty[row] = 1;
+  }
+}
+
+void ui_comp_grid_mark_all_dirty(ScreenGrid *grid)
+{
+#ifdef UNIT_TESTING
+  return;
+#endif
+  if (grid == NULL || grid == &default_grid) {
+    return;
+  }
+  if (grid->comp_row_dirty == NULL) {
+    if (grid->rows <= 0) {
+      return;
+    }
+    grid->comp_row_dirty = xcalloc((size_t)grid->rows, sizeof(*grid->comp_row_dirty));
+  }
+  memset(grid->comp_row_dirty, 1, (size_t)grid->rows);
+}
 
 void ui_comp_init(void)
 {
@@ -215,6 +252,9 @@ bool ui_comp_put_grid(ScreenGrid *grid, int row, int col, int height, int width,
     grid->comp_col = col;
     grid->comp_index = insert_at;
     grid->pending_comp_index_update = true;
+  }
+  if (moved) {
+    ui_comp_grid_mark_all_dirty(grid);
   }
   if (moved && valid && ui_comp_should_draw()) {
     compose_area(grid->comp_row, grid->comp_row + grid->rows,
@@ -548,6 +588,16 @@ static int overlay_span_cmp(const void *lhs, const void *rhs)
   if (a->start != b->start) {
     return a->start - b->start;
   }
+  if (a->grid != b->grid) {
+    size_t a_index = a->grid != NULL ? a->grid->comp_index : 0;
+    size_t b_index = b->grid != NULL ? b->grid->comp_index : 0;
+    if (a_index != b_index) {
+      return (a_index < b_index) ? -1 : 1;
+    }
+    if (a->grid != b->grid) {
+      return (a->grid < b->grid) ? -1 : 1;
+    }
+  }
   return a->end - b->end;
 }
 
@@ -593,7 +643,11 @@ static size_t collect_overlay_spans(Integer row, Integer startcol, Integer endco
       continue;
     }
 
-    OverlaySpan span = { span_start, span_end };
+    OverlaySpan span = {
+      .start = span_start,
+      .end = span_end,
+      .grid = g,
+    };
     kv_push(overlay_row_spans, span);
   }
 
@@ -609,7 +663,7 @@ static size_t collect_overlay_spans(Integer row, Integer startcol, Integer endco
   OverlaySpan current = spans[0];
   for (size_t i = 1; i < span_count; i++) {
     OverlaySpan span = spans[i];
-    if (span.start <= current.end) {
+    if (span.grid == current.grid && span.start <= current.end) {
       if (span.end > current.end) {
         current.end = span.end;
       }
@@ -620,7 +674,6 @@ static size_t collect_overlay_spans(Integer row, Integer startcol, Integer endco
   }
   spans[write_index++] = current;
   kv_size(overlay_row_spans) = write_index;
-
   return kv_size(overlay_row_spans);
 }
 
@@ -667,7 +720,29 @@ static void compose_area(Integer startrow, Integer endrow, Integer startcol, Int
     }
     for (size_t i = 0; i < span_count; i++) {
       OverlaySpan span = kv_A(overlay_row_spans, i);
+      bool span_skip = false;
+      ScreenGrid *span_grid = span.grid;
+      int span_local_row = -1;
+      if (span_grid != NULL) {
+        span_local_row = r - span_grid->comp_row;
+        if (span_local_row >= 0 && span_local_row < span_grid->rows) {
+          bool row_dirty = span_grid->comp_row_dirty != NULL
+                           && span_grid->comp_row_dirty[span_local_row] != 0;
+          if (!row_dirty && !span_grid->blending) {
+            span_skip = true;
+          }
+        }
+      }
+      if (span_skip) {
+        ui_comp_metrics.overlay_skip_calls++;
+        ui_comp_metrics.overlay_skip_rows += (uint64_t)(span.end - span.start);
+        continue;
+      }
       compose_line(r, span.start, span.end, kLineFlagInvalid);
+      if (span_grid != NULL && span_grid->comp_row_dirty != NULL
+          && span_local_row >= 0 && span_local_row < span_grid->rows) {
+        span_grid->comp_row_dirty[span_local_row] = 0;
+      }
     }
   }
 }
@@ -679,6 +754,7 @@ static void compose_area(Integer startrow, Integer endrow, Integer startcol, Int
 void ui_comp_compose_grid(ScreenGrid *grid)
 {
   if (ui_comp_should_draw()) {
+    ui_comp_grid_mark_all_dirty(grid);
     compose_area(grid->comp_row, grid->comp_row + grid->rows,
                  grid->comp_col, grid->comp_col + grid->cols);
   }
@@ -692,6 +768,7 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
     return;
   }
 
+  int local_row = (int)row;
   row += curgrid->comp_row;
   startcol += curgrid->comp_col;
   endcol += curgrid->comp_col;
@@ -720,11 +797,26 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
   }
 
   bool covered = curgrid_covered_above((int)row, 1, NULL, NULL, NULL, NULL);
+  bool overlay_grid = (curgrid != &default_grid);
+  bool overlay_row_dirty = false;
+  if (overlay_grid && curgrid->comp_row_dirty != NULL
+      && local_row >= 0 && local_row < curgrid->rows) {
+    overlay_row_dirty = curgrid->comp_row_dirty[local_row] != 0;
+  }
+  if (overlay_grid && (flags & kLineFlagInvalid) && !overlay_row_dirty) {
+    ui_comp_metrics.overlay_skip_calls++;
+    ui_comp_metrics.overlay_skip_rows++;
+    return;
+  }
   // TODO(bfredl): eventually should just fix compose_line to respect clearing
   // and optimize it for uncovered lines.
   if ((flags & kLineFlagInvalid) || curgrid->blending) {
     compose_debug(row, row + 1, startcol, clearcol, dbghl_composed, true);
     compose_line(row, startcol, clearcol, flags);
+    if (overlay_grid && curgrid->comp_row_dirty != NULL
+        && local_row >= 0 && local_row < curgrid->rows) {
+      curgrid->comp_row_dirty[local_row] = 0;
+    }
     return;
   }
 
@@ -753,6 +845,19 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
       OverlaySpan span = kv_A(overlay_row_spans, i);
       int span_start = span.start;
       int span_end = span.end;
+      bool span_skip = false;
+      ScreenGrid *span_grid = span.grid;
+      int span_local_row = -1;
+      if (span_grid != NULL) {
+        span_local_row = (int)row - span_grid->comp_row;
+        if (span_local_row >= 0 && span_local_row < span_grid->rows) {
+          bool row_dirty = span_grid->comp_row_dirty != NULL
+                           && span_grid->comp_row_dirty[span_local_row] != 0;
+          if (!row_dirty && !span_grid->blending) {
+            span_skip = true;
+          }
+        }
+      }
 
       if (span_start > seg_cursor && seg_cursor < (int)endcol) {
         int text_end = MIN(span_start, (int)endcol);
@@ -771,8 +876,18 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
       }
 
       if (span_end > seg_cursor) {
+        if (span_skip) {
+          ui_comp_metrics.overlay_skip_calls++;
+          ui_comp_metrics.overlay_skip_rows += (uint64_t)(span_end - span_start);
+          seg_cursor = span_end;
+          continue;
+        }
         compose_line(row, span_start, span_end, flags);
         seg_cursor = span_end;
+        if (span_grid != NULL && span_grid->comp_row_dirty != NULL
+            && span_local_row >= 0 && span_local_row < span_grid->rows) {
+          span_grid->comp_row_dirty[span_local_row] = 0;
+        }
       }
     }
 
@@ -797,6 +912,10 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
       compose_debug(row, row + 1, clean_start, clearcol, dbghl_clear, true);
       ui_composed_call_raw_line(1, row, clean_start, clean_start, clearcol, clearattr,
                                 flags, chunk + offset, attrs + offset);
+    }
+    if (overlay_grid && curgrid->comp_row_dirty != NULL
+        && local_row >= 0 && local_row < curgrid->rows) {
+      curgrid->comp_row_dirty[local_row] = 0;
     }
   } else {
     compose_debug(row, row + 1, startcol, endcol, dbghl_normal, endcol >= clearcol);
@@ -926,6 +1045,9 @@ void ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left, I
 {
   if (!ui_comp_should_draw() || !ui_comp_set_grid((int)grid)) {
     return;
+  }
+  if (curgrid != &default_grid) {
+    ui_comp_grid_mark_all_dirty(curgrid);
   }
   top += curgrid->comp_row;
   bot += curgrid->comp_row;

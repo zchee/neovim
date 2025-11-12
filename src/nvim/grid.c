@@ -34,6 +34,7 @@
 #include "nvim/optionstr.h"
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
+#include "nvim/ui_compositor.h"
 #include "nvim/ui_defs.h"
 
 #include "grid.c.generated.h"
@@ -825,7 +826,9 @@ void grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol
     }
   }
 
-  if (clear_end > start_dirty) {
+  bool line_changed = clear_end > start_dirty;
+
+  if (line_changed) {
     if (!grid->throttled) {
       ui_line(grid, row, invalid_row, coloff + start_dirty, coloff + end_dirty, coloff + clear_end,
               clear_attr, flags & SLF_WRAP);
@@ -837,6 +840,10 @@ void grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol
       }
     }
   }
+
+  if (line_changed) {
+    ui_comp_grid_mark_dirty(grid, row);
+  }
 }
 
 void grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid)
@@ -845,11 +852,17 @@ void grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid)
   ScreenGrid ngrid = *grid;
   assert(rows >= 0 && columns >= 0);
   size_t ncells = (size_t)rows * (size_t)columns;
+  if (grid->chars == NULL) {
+    // Fresh allocation; make sure optional compositor state starts null.
+    grid->comp_row_dirty = NULL;
+  }
+  assert(grid->chars == NULL || grid->comp_row_dirty != NULL);
   ngrid.chars = xmalloc(ncells * sizeof(schar_T));
   ngrid.attrs = xmalloc(ncells * sizeof(sattr_T));
   ngrid.vcols = xmalloc(ncells * sizeof(colnr_T));
   memset(ngrid.vcols, -1, ncells * sizeof(colnr_T));
   ngrid.line_offset = xmalloc((size_t)rows * sizeof(*ngrid.line_offset));
+  ngrid.comp_row_dirty = xcalloc((size_t)rows, sizeof(*ngrid.comp_row_dirty));
 
   ngrid.rows = rows;
   ngrid.cols = columns;
@@ -902,11 +915,13 @@ void grid_free(ScreenGrid *grid)
   xfree(grid->attrs);
   xfree(grid->vcols);
   xfree(grid->line_offset);
+  xfree(grid->comp_row_dirty);
 
   grid->chars = NULL;
   grid->attrs = NULL;
   grid->vcols = NULL;
   grid->line_offset = NULL;
+  grid->comp_row_dirty = NULL;
 }
 
 #ifdef EXITFREE
