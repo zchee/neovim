@@ -5,6 +5,7 @@
 
 #include <assert.h>
 #include <inttypes.h>
+#include <stdint.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -26,6 +27,7 @@
 #include "nvim/message.h"
 #include "nvim/option_vars.h"
 #include "nvim/os/time.h"
+#include "nvim/popupmenu.h"
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
 #include "nvim/ui_compositor.h"
@@ -53,6 +55,8 @@ static int msg_sep_row = -1;
 static schar_T msg_sep_char = schar_from_ascii(' ');
 
 static int dbghl_normal, dbghl_clear, dbghl_composed, dbghl_recompose;
+
+static UICompMetrics ui_comp_metrics;
 
 void ui_comp_init(void)
 {
@@ -589,7 +593,7 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
     endcol = MIN(endcol, clearcol);
   }
 
-  bool covered = curgrid_covered_above((int)row);
+  bool covered = curgrid_covered_above((int)row, 1, NULL, NULL, NULL, NULL);
   // TODO(bfredl): eventually should just fix compose_line to respect clearing
   // and optimize it for uncovered lines.
   if (flags & kLineFlagInvalid || covered || curgrid->blending) {
@@ -660,11 +664,61 @@ void ui_comp_msg_set_pos(Integer grid, Integer row, Boolean scrolled, String sep
 /// check if curgrid is covered on row or above
 ///
 /// TODO(bfredl): currently this only handles message row
-static bool curgrid_covered_above(int row)
+static bool curgrid_covered_above(int row, int span, bool *above_msg_out, uint64_t *cover_handle_out,
+                                 int *cover_zindex_out, ScreenGrid **cover_grid_out)
 {
-  bool above_msg = (kv_A(layers, kv_size(layers) - 1) == &msg_grid
-                    && row < msg_current_row - (msg_was_scrolled ? 1 : 0));
-  return kv_size(layers) - (above_msg ? 1 : 0) > curgrid->comp_index + 1;
+  size_t layer_count = kv_size(layers);
+  bool above_msg = false;
+  bool ignore_msg = false;
+  int span_abs = span >= 0 ? span : -span;
+  int bottom_row = row + (span_abs > 0 ? span_abs - 1 : 0);
+  ScreenGrid *cover_grid = NULL;
+  if (layer_count > 0) {
+    ScreenGrid *top = kv_A(layers, layer_count - 1);
+    if (top == &msg_grid) {
+      if (msg_current_row == INT_MAX) {
+        ignore_msg = true;
+      } else {
+        int msg_threshold = msg_current_row - (msg_was_scrolled ? 1 : 0);
+        bool msg_above_row = row < msg_threshold;
+        bool msg_overlap_span = bottom_row >= msg_threshold;
+        if (msg_above_row && msg_overlap_span) {
+          above_msg = true;
+        } else {
+          ignore_msg = true;
+        }
+      }
+    }
+  }
+  if (above_msg_out != NULL) {
+    *above_msg_out = above_msg;
+  }
+  size_t effective_count = layer_count - ((above_msg || ignore_msg) ? 1 : 0);
+  bool covered = effective_count > (size_t)curgrid->comp_index + 1;
+  uint64_t handle = 0;
+  int zindex = 0;
+  if (covered) {
+    for (size_t i = (size_t)curgrid->comp_index + 1; i < layer_count; i++) {
+      ScreenGrid *g = kv_A(layers, i);
+      if (g == &msg_grid && (above_msg || ignore_msg)) {
+        continue;
+      }
+      handle = (uint64_t)g->handle;
+      zindex = g->zindex;
+      cover_grid = g;
+      break;
+    }
+  }
+  if (cover_handle_out != NULL) {
+    *cover_handle_out = handle;
+  }
+  if (cover_zindex_out != NULL) {
+    *cover_zindex_out = zindex;
+  }
+  if (cover_grid_out != NULL) {
+    *cover_grid_out = cover_grid;
+  }
+  return covered;
 }
 
 void ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left, Integer right,
@@ -677,22 +731,158 @@ void ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left, I
   bot += curgrid->comp_row;
   left += curgrid->comp_col;
   right += curgrid->comp_col;
-  bool covered = curgrid_covered_above((int)(bot - MAX(rows, 0)));
+  int left_col = (int)left;
+  int right_col = (int)right;
+  bool covered_above_msg = false;
+  uint64_t covered_handle = 0;
+  int covered_zindex = 0;
+  bool covered_external = false;
+  bool covered_popup = false;
+  ScreenGrid *cover_grid = NULL;
+  int checked_row = (int)(bot - MAX(rows, 0));
+  int span = (int)rows;
+  if (span < 0) {
+    span = -span;
+  }
+  bool covered = curgrid_covered_above(checked_row, span, &covered_above_msg, &covered_handle, &covered_zindex, &cover_grid);
+  bool popup_candidate = covered && covered_zindex >= kZIndexPopupMenu && covered_zindex < kZIndexCmdlinePopupMenu;
+  if (popup_candidate) {
+    if (!pum_visible()) {
+      ui_comp_metrics.fallback_popup_ignored++;
+      ui_composed_call_grid_scroll(1, top, bot, left, right, rows, cols);
+      if (rdb_flags & kOptRdbFlagCompositor) {
+        debug_delay(2);
+      }
+      return;
+    } else {
+      covered_popup = true;
+    }
+  }
+  if (covered && covered_handle == 0 && covered_zindex == 0) {
+    covered_external = true;
+  }
+
+  if (!covered && !curgrid->blending) {
+    ui_composed_call_grid_scroll(1, top, bot, left, right, rows, cols);
+    if (rdb_flags & kOptRdbFlagCompositor) {
+      debug_delay(2);
+    }
+    return;
+  }
 
   if (covered || curgrid->blending) {
     // TODO(bfredl):
     // 1. check if rectangles actually overlap
     // 2. calculate subareas that can scroll.
     compose_debug(top, bot, left, right, dbghl_recompose, true);
-    for (int r = (int)(top + MAX(-rows, 0)); r < bot - MAX(rows, 0); r++) {
+
+    int loop_start = (int)(top + MAX(-rows, 0));
+    int loop_end = (int)(bot - MAX(rows, 0));
+    int row_overlap_start = loop_start;
+    int row_overlap_end = loop_end;
+    int overlap_left = left_col;
+    int overlap_right = right_col;
+    if (cover_grid != NULL) {
+      int cover_row_start = cover_grid->comp_row;
+      int cover_row_end = cover_grid->comp_row + cover_grid->rows;
+      int cover_col_start = cover_grid->comp_col;
+      int cover_col_end = cover_grid->comp_col + cover_grid->cols;
+      row_overlap_start = MAX(loop_start, cover_row_start);
+      row_overlap_end = MIN(loop_end, cover_row_end);
+      overlap_left = MAX(left_col, cover_col_start);
+      overlap_right = MIN(right_col, cover_col_end);
+      if (row_overlap_start < loop_start) {
+        row_overlap_start = loop_start;
+      }
+      if (row_overlap_end > loop_end) {
+        row_overlap_end = loop_end;
+      }
+      if (overlap_left < left_col) {
+        overlap_left = left_col;
+      }
+      if (overlap_right > right_col) {
+        overlap_right = right_col;
+      }
+      if (row_overlap_start < row_overlap_end && overlap_left < overlap_right) {
+        ui_composed_call_grid_scroll(1, top, bot, left, right, rows, cols);
+        if (rdb_flags & kOptRdbFlagCompositor) {
+          debug_delay(2);
+        }
+      } else {
+        row_overlap_start = loop_start;
+        row_overlap_end = loop_end;
+        overlap_left = left_col;
+        overlap_right = right_col;
+      }
+    }
+    int target_span = row_overlap_end - row_overlap_start;
+    if (target_span < 0) {
+      target_span = 0;
+    }
+    int recomposed_lines = 0;
+    uint64_t processed_width = 0;
+
+#if defined(STAP_PROBE4) && defined(STAP_PROBE5)
+    // USDT probe records fallback scroll entry: bit0=covered, bit1=blending.
+    NVIM_PROBE(nvim_ui_comp_scroll_fallback_begin, 5, (int64_t)curgrid->handle,
+               (int64_t)top, (int64_t)bot, (int64_t)rows,
+               (int64_t)((covered ? 1 : 0) | (curgrid->blending ? 2 : 0)));
+#endif
+    for (int r = row_overlap_start; r < row_overlap_end; r++) {
       // TODO(bfredl): workaround for win_update() performing two scrolls in a
       // row, where the latter might scroll invalid space created by the first.
       // ideally win_update() should keep track of this itself and not scroll
       // the invalid space.
-      if (curgrid->attrs[curgrid->line_offset[r - curgrid->comp_row]
-                         + (size_t)left - (size_t)curgrid->comp_col] >= 0) {
-        compose_line(r, left, right, 0);
+      size_t attr_off = curgrid->line_offset[r - curgrid->comp_row]
+                        + (size_t)overlap_left - (size_t)curgrid->comp_col;
+      if (curgrid->attrs[attr_off] >= 0) {
+        recomposed_lines++;
+        compose_line(r, overlap_left, overlap_right, 0);
+        processed_width += (uint64_t)(overlap_right - overlap_left);
       }
+    }
+
+#if defined(STAP_PROBE4) && defined(STAP_PROBE5)
+    // USDT probe emits recomposed span length alongside processed rows.
+    NVIM_PROBE(nvim_ui_comp_scroll_fallback_end, 4, (int64_t)curgrid->handle,
+               (int64_t)target_span, (int64_t)recomposed_lines,
+               (int64_t)(overlap_right - overlap_left));
+#endif
+
+    ui_comp_metrics.fallback_calls++;
+    ui_comp_metrics.fallback_span_total += (uint64_t)target_span;
+    ui_comp_metrics.fallback_recomposed_total += (uint64_t)recomposed_lines;
+    ui_comp_metrics.fallback_width_total += processed_width;
+    uint64_t skipped_lines = 0;
+    if (target_span > recomposed_lines) {
+      skipped_lines = (uint64_t)(target_span - recomposed_lines);
+    }
+    ui_comp_metrics.fallback_skipped_lines_total += skipped_lines;
+    ui_comp_metrics.fallback_last_row_checked = (int64_t)checked_row;
+    ui_comp_metrics.fallback_msg_row = (int64_t)msg_current_row;
+    ui_comp_metrics.fallback_rows_argument = (int64_t)rows;
+    ui_comp_metrics.fallback_last_row_checked = (int64_t)checked_row;
+    ui_comp_metrics.fallback_msg_row = (int64_t)msg_current_row;
+    ui_comp_metrics.fallback_rows_argument = (int64_t)rows;
+    if (curgrid->blending) {
+      ui_comp_metrics.fallback_blending_calls++;
+    }
+    if (covered) {
+      ui_comp_metrics.fallback_covered_calls++;
+      if (covered_above_msg) {
+        ui_comp_metrics.fallback_above_msg_calls++;
+      }
+      ui_comp_metrics.fallback_cover_handle_last = covered_handle;
+      ui_comp_metrics.fallback_cover_zindex_last = covered_zindex;
+      if (covered_popup) {
+        ui_comp_metrics.fallback_popup_calls++;
+      }
+      if (covered_external) {
+        ui_comp_metrics.fallback_external_calls++;
+      }
+    } else {
+      ui_comp_metrics.fallback_cover_handle_last = 0;
+      ui_comp_metrics.fallback_cover_zindex_last = 0;
     }
   } else {
     ui_composed_call_grid_scroll(1, top, bot, left, right, rows, cols);
@@ -719,4 +909,18 @@ void ui_comp_grid_resize(Integer grid, Integer width, Integer height)
       bufsize = new_bufsize;
     }
   }
+}
+
+/// Collects compositor fallback metrics without resetting counters.
+void ui_comp_metrics_snapshot(UICompMetrics *out)
+{
+  if (out != NULL) {
+    *out = ui_comp_metrics;
+  }
+}
+
+/// Resets compositor fallback metrics counters.
+void ui_comp_metrics_reset(void)
+{
+  memset(&ui_comp_metrics, 0, sizeof(ui_comp_metrics));
 }
