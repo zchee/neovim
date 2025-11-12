@@ -5,15 +5,16 @@
 
 #include <assert.h>
 #include <inttypes.h>
-#include <stdint.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
 
 #include "klib/kvec.h"
 #include "nvim/api/private/defs.h"
+#include "nvim/api/private/helpers.h"
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/globals.h"
@@ -57,6 +58,13 @@ static schar_T msg_sep_char = schar_from_ascii(' ');
 static int dbghl_normal, dbghl_clear, dbghl_composed, dbghl_recompose;
 
 static UICompMetrics ui_comp_metrics;
+
+typedef struct {
+  int start;
+  int end;
+} OverlaySpan;
+
+static kvec_t(OverlaySpan) overlay_row_spans = KV_INITIAL_VALUE;
 
 void ui_comp_init(void)
 {
@@ -533,6 +541,107 @@ static void debug_delay(Integer lines)
   os_sleep(factor * wd);
 }
 
+static int overlay_span_cmp(const void *lhs, const void *rhs)
+{
+  const OverlaySpan *a = (const OverlaySpan *)lhs;
+  const OverlaySpan *b = (const OverlaySpan *)rhs;
+  if (a->start != b->start) {
+    return a->start - b->start;
+  }
+  return a->end - b->end;
+}
+
+static size_t collect_overlay_spans(Integer row, Integer startcol, Integer endcol)
+{
+  startcol = MAX(startcol, 0);
+  endcol = MIN(endcol, default_grid.cols);
+  if (endcol <= startcol) {
+    kv_size(overlay_row_spans) = 0;
+    return 0;
+  }
+
+  kv_size(overlay_row_spans) = 0;
+
+  size_t layer_count = kv_size(layers);
+  for (size_t i = 1; i < layer_count; i++) {
+    ScreenGrid *g = kv_A(layers, i);
+    if (g->comp_disabled) {
+      continue;
+    }
+
+    int grid_width = MIN(g->cols, g->comp_width);
+    int grid_height = MIN(g->rows, g->comp_height);
+    if (grid_width <= 0 || grid_height <= 0) {
+      continue;
+    }
+    if (row < g->comp_row || row >= g->comp_row + grid_height) {
+      continue;
+    }
+
+    int grid_left = g->comp_col;
+    int grid_right = grid_left + grid_width;
+    if (grid_right <= startcol || grid_left >= endcol) {
+      continue;
+    }
+
+    int span_start = (int)MAX(startcol, grid_left);
+    if (span_start < 0) {
+      span_start = 0;
+    }
+    int span_end = (int)MIN(endcol, grid_right);
+    if (span_end <= span_start) {
+      continue;
+    }
+
+    OverlaySpan span = { span_start, span_end };
+    kv_push(overlay_row_spans, span);
+  }
+
+  if (kv_size(overlay_row_spans) == 0) {
+    return 0;
+  }
+
+  OverlaySpan *spans = overlay_row_spans.items;
+  size_t span_count = kv_size(overlay_row_spans);
+  qsort(spans, span_count, sizeof(OverlaySpan), overlay_span_cmp);
+
+  size_t write_index = 0;
+  OverlaySpan current = spans[0];
+  for (size_t i = 1; i < span_count; i++) {
+    OverlaySpan span = spans[i];
+    if (span.start <= current.end) {
+      if (span.end > current.end) {
+        current.end = span.end;
+      }
+    } else {
+      spans[write_index++] = current;
+      current = span;
+    }
+  }
+  spans[write_index++] = current;
+  kv_size(overlay_row_spans) = write_index;
+
+  return kv_size(overlay_row_spans);
+}
+
+Array ui_comp_collect_overlay_spans(int row, int startcol, int endcol, Arena *arena)
+{
+  Array result = arena_array(arena, 0);
+  size_t span_count = collect_overlay_spans(row, startcol, endcol);
+  if (span_count == 0) {
+    return result;
+  }
+  Array spans = arena_array(arena, span_count);
+  for (size_t i = 0; i < span_count; i++) {
+    OverlaySpan span = kv_A(overlay_row_spans, i);
+    Array entry = arena_array(arena, 2);
+    ADD_C(entry, INTEGER_OBJ((Integer)span.start));
+    ADD_C(entry, INTEGER_OBJ((Integer)span.end));
+    ADD_C(spans, ARRAY_OBJ(entry));
+  }
+  return spans;
+}
+
 static void compose_area(Integer startrow, Integer endrow, Integer startcol, Integer endcol)
 {
   compose_debug(startrow, endrow, startcol, endcol, dbghl_recompose, true);
@@ -542,7 +651,24 @@ static void compose_area(Integer startrow, Integer endrow, Integer startcol, Int
     return;
   }
   for (int r = (int)startrow; r < endrow; r++) {
-    compose_line(r, startcol, endcol, kLineFlagInvalid);
+    size_t span_count = collect_overlay_spans(r, startcol, endcol);
+    if (span_count == 0) {
+      compose_line(r, startcol, endcol, kLineFlagInvalid);
+      continue;
+    }
+    uint64_t overlay_width_sum = 0;
+    for (size_t i = 0; i < span_count; i++) {
+      OverlaySpan span = kv_A(overlay_row_spans, i);
+      overlay_width_sum += (uint64_t)(span.end - span.start);
+    }
+    if (overlay_width_sum > 0) {
+      ui_comp_metrics.overlay_prune_calls++;
+      ui_comp_metrics.overlay_prune_width_total += overlay_width_sum;
+    }
+    for (size_t i = 0; i < span_count; i++) {
+      OverlaySpan span = kv_A(overlay_row_spans, i);
+      compose_line(r, span.start, span.end, kLineFlagInvalid);
+    }
   }
 }
 
@@ -596,9 +722,82 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
   bool covered = curgrid_covered_above((int)row, 1, NULL, NULL, NULL, NULL);
   // TODO(bfredl): eventually should just fix compose_line to respect clearing
   // and optimize it for uncovered lines.
-  if (flags & kLineFlagInvalid || covered || curgrid->blending) {
+  if ((flags & kLineFlagInvalid) || curgrid->blending) {
     compose_debug(row, row + 1, startcol, clearcol, dbghl_composed, true);
     compose_line(row, startcol, clearcol, flags);
+    return;
+  }
+
+  if (covered) {
+    size_t span_count = collect_overlay_spans(row, startcol, clearcol);
+    if (span_count == 0) {
+      compose_debug(row, row + 1, startcol, clearcol, dbghl_composed, true);
+      compose_line(row, startcol, clearcol, flags);
+      return;
+    }
+
+    uint64_t overlay_width_sum = 0;
+    for (size_t i = 0; i < span_count; i++) {
+      OverlaySpan span = kv_A(overlay_row_spans, i);
+      overlay_width_sum += (uint64_t)(span.end - span.start);
+    }
+    if (overlay_width_sum > 0) {
+      ui_comp_metrics.overlay_prune_calls++;
+      ui_comp_metrics.overlay_prune_width_total += overlay_width_sum;
+    }
+
+    compose_debug(row, row + 1, startcol, clearcol, dbghl_composed, true);
+
+    int seg_cursor = (int)startcol;
+    for (size_t i = 0; i < span_count && seg_cursor < (int)clearcol; i++) {
+      OverlaySpan span = kv_A(overlay_row_spans, i);
+      int span_start = span.start;
+      int span_end = span.end;
+
+      if (span_start > seg_cursor && seg_cursor < (int)endcol) {
+        int text_end = MIN(span_start, (int)endcol);
+        if (text_end > seg_cursor) {
+          size_t offset = (size_t)(seg_cursor - startcol);
+          compose_debug(row, row + 1, seg_cursor, text_end, dbghl_normal,
+                        text_end >= (int)clearcol);
+#ifndef NDEBUG
+          for (int i_attr = 0; i_attr < text_end - seg_cursor; i_attr++) {
+            assert(attrs[offset + (size_t)i_attr] >= 0);
+          }
+#endif
+          ui_composed_call_raw_line(1, row, seg_cursor, text_end, text_end, clearattr,
+                                    flags, chunk + offset, attrs + offset);
+        }
+      }
+
+      if (span_end > seg_cursor) {
+        compose_line(row, span_start, span_end, flags);
+        seg_cursor = span_end;
+      }
+    }
+
+    if (seg_cursor < (int)endcol) {
+      int text_end = (int)endcol;
+      size_t offset = (size_t)(seg_cursor - startcol);
+      compose_debug(row, row + 1, seg_cursor, text_end, dbghl_normal, text_end >= (int)clearcol);
+#ifndef NDEBUG
+      for (int i_attr = 0; i_attr < text_end - seg_cursor; i_attr++) {
+        assert(attrs[offset + (size_t)i_attr] >= 0);
+      }
+#endif
+      ui_composed_call_raw_line(1, row, seg_cursor, text_end, text_end, clearattr,
+                                flags, chunk + offset, attrs + offset);
+      seg_cursor = text_end;
+    }
+
+    if (seg_cursor < (int)clearcol) {
+      int clean_start = seg_cursor;
+      int chunk_col = (int)MIN((Integer)endcol, (Integer)clean_start);
+      size_t offset = (size_t)(chunk_col - startcol);
+      compose_debug(row, row + 1, clean_start, clearcol, dbghl_clear, true);
+      ui_composed_call_raw_line(1, row, clean_start, clean_start, clearcol, clearattr,
+                                flags, chunk + offset, attrs + offset);
+    }
   } else {
     compose_debug(row, row + 1, startcol, endcol, dbghl_normal, endcol >= clearcol);
     compose_debug(row, row + 1, endcol, clearcol, dbghl_clear, true);
@@ -664,8 +863,9 @@ void ui_comp_msg_set_pos(Integer grid, Integer row, Boolean scrolled, String sep
 /// check if curgrid is covered on row or above
 ///
 /// TODO(bfredl): currently this only handles message row
-static bool curgrid_covered_above(int row, int span, bool *above_msg_out, uint64_t *cover_handle_out,
-                                 int *cover_zindex_out, ScreenGrid **cover_grid_out)
+static bool curgrid_covered_above(int row, int span, bool *above_msg_out,
+                                  uint64_t *cover_handle_out, int *cover_zindex_out,
+                                  ScreenGrid **cover_grid_out)
 {
   size_t layer_count = kv_size(layers);
   bool above_msg = false;
@@ -744,8 +944,10 @@ void ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left, I
   if (span < 0) {
     span = -span;
   }
-  bool covered = curgrid_covered_above(checked_row, span, &covered_above_msg, &covered_handle, &covered_zindex, &cover_grid);
-  bool popup_candidate = covered && covered_zindex >= kZIndexPopupMenu && covered_zindex < kZIndexCmdlinePopupMenu;
+  bool covered = curgrid_covered_above(checked_row, span, &covered_above_msg, &covered_handle,
+                                       &covered_zindex, &cover_grid);
+  bool popup_candidate = covered && covered_zindex >= kZIndexPopupMenu
+                         && covered_zindex < kZIndexCmdlinePopupMenu;
   if (popup_candidate) {
     if (!pum_visible()) {
       ui_comp_metrics.fallback_popup_ignored++;

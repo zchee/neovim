@@ -1753,21 +1753,32 @@ Dict nvim__stats(Arena *arena)
   Dict comp = arena_dict(arena, 17);
   PUT_C(comp, "fallback_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_calls));
   PUT_C(comp, "fallback_span_total", INTEGER_OBJ((Integer)comp_metrics.fallback_span_total));
-  PUT_C(comp, "fallback_recomposed_total", INTEGER_OBJ((Integer)comp_metrics.fallback_recomposed_total));
+  PUT_C(comp, "fallback_recomposed_total",
+        INTEGER_OBJ((Integer)comp_metrics.fallback_recomposed_total));
   PUT_C(comp, "fallback_width_total", INTEGER_OBJ((Integer)comp_metrics.fallback_width_total));
-  PUT_C(comp, "fallback_blending_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_blending_calls));
+  PUT_C(comp, "fallback_blending_calls",
+        INTEGER_OBJ((Integer)comp_metrics.fallback_blending_calls));
   PUT_C(comp, "fallback_covered_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_covered_calls));
-  PUT_C(comp, "fallback_above_msg_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_above_msg_calls));
-  PUT_C(comp, "fallback_skipped_lines_total", INTEGER_OBJ((Integer)comp_metrics.fallback_skipped_lines_total));
-  PUT_C(comp, "fallback_cover_handle_last", INTEGER_OBJ((Integer)comp_metrics.fallback_cover_handle_last));
-  PUT_C(comp, "fallback_cover_zindex_last", INTEGER_OBJ((Integer)comp_metrics.fallback_cover_zindex_last));
+  PUT_C(comp, "fallback_above_msg_calls",
+        INTEGER_OBJ((Integer)comp_metrics.fallback_above_msg_calls));
+  PUT_C(comp, "fallback_skipped_lines_total",
+        INTEGER_OBJ((Integer)comp_metrics.fallback_skipped_lines_total));
+  PUT_C(comp, "fallback_cover_handle_last",
+        INTEGER_OBJ((Integer)comp_metrics.fallback_cover_handle_last));
+  PUT_C(comp, "fallback_cover_zindex_last",
+        INTEGER_OBJ((Integer)comp_metrics.fallback_cover_zindex_last));
   PUT_C(comp, "fallback_popup_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_popup_calls));
   PUT_C(comp, "fallback_popup_ignored", INTEGER_OBJ((Integer)comp_metrics.fallback_popup_ignored));
-  PUT_C(comp, "fallback_external_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_external_calls));
-  PUT_C(comp, "fallback_last_row_checked", INTEGER_OBJ((Integer)comp_metrics.fallback_last_row_checked));
+  PUT_C(comp, "fallback_external_calls",
+        INTEGER_OBJ((Integer)comp_metrics.fallback_external_calls));
+  PUT_C(comp, "fallback_last_row_checked",
+        INTEGER_OBJ((Integer)comp_metrics.fallback_last_row_checked));
   PUT_C(comp, "fallback_msg_row", INTEGER_OBJ((Integer)comp_metrics.fallback_msg_row));
   PUT_C(comp, "fallback_rows_argument", INTEGER_OBJ((Integer)comp_metrics.fallback_rows_argument));
   PUT_C(comp, "msg_grid_handle", INTEGER_OBJ((Integer)msg_grid.handle));
+  PUT_C(comp, "overlay_prune_calls", INTEGER_OBJ((Integer)comp_metrics.overlay_prune_calls));
+  PUT_C(comp, "overlay_prune_width_total",
+        INTEGER_OBJ((Integer)comp_metrics.overlay_prune_width_total));
   PUT_C(rv, "ui_comp_scroll_fallback", DICT_OBJ(comp));
   return rv;
 }
@@ -1776,6 +1787,11 @@ Dict nvim__stats(Arena *arena)
 void nvim__reset_ui_comp_stats(void)
 {
   ui_comp_metrics_reset();
+}
+
+Array nvim__collect_overlay_spans(Integer row, Integer startcol, Integer endcol, Arena *arena)
+{
+  return ui_comp_collect_overlay_spans((int)row, (int)startcol, (int)endcol, arena);
 }
 
 /// Gets a list of dictionaries representing attached UIs.
