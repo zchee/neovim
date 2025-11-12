@@ -83,6 +83,7 @@
 #include "nvim/terminal.h"
 #include "nvim/types_defs.h"
 #include "nvim/ui.h"
+#include "nvim/ui_compositor.h"
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
@@ -1740,14 +1741,41 @@ Float nvim__id_float(Float flt)
 /// @return Map of various internal stats.
 Dict nvim__stats(Arena *arena)
 {
-  Dict rv = arena_dict(arena, 6);
+  Dict rv = arena_dict(arena, 7);
   PUT_C(rv, "fsync", INTEGER_OBJ(g_stats.fsync));
   PUT_C(rv, "log_skip", INTEGER_OBJ(g_stats.log_skip));
   PUT_C(rv, "lua_refcount", INTEGER_OBJ(nlua_get_global_ref_count()));
   PUT_C(rv, "redraw", INTEGER_OBJ(g_stats.redraw));
   PUT_C(rv, "arena_alloc_count", INTEGER_OBJ((Integer)arena_alloc_count));
   PUT_C(rv, "ts_query_parse_count", INTEGER_OBJ((Integer)tslua_query_parse_count));
+  UICompMetrics comp_metrics;
+  ui_comp_metrics_snapshot(&comp_metrics);
+  Dict comp = arena_dict(arena, 17);
+  PUT_C(comp, "fallback_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_calls));
+  PUT_C(comp, "fallback_span_total", INTEGER_OBJ((Integer)comp_metrics.fallback_span_total));
+  PUT_C(comp, "fallback_recomposed_total", INTEGER_OBJ((Integer)comp_metrics.fallback_recomposed_total));
+  PUT_C(comp, "fallback_width_total", INTEGER_OBJ((Integer)comp_metrics.fallback_width_total));
+  PUT_C(comp, "fallback_blending_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_blending_calls));
+  PUT_C(comp, "fallback_covered_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_covered_calls));
+  PUT_C(comp, "fallback_above_msg_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_above_msg_calls));
+  PUT_C(comp, "fallback_skipped_lines_total", INTEGER_OBJ((Integer)comp_metrics.fallback_skipped_lines_total));
+  PUT_C(comp, "fallback_cover_handle_last", INTEGER_OBJ((Integer)comp_metrics.fallback_cover_handle_last));
+  PUT_C(comp, "fallback_cover_zindex_last", INTEGER_OBJ((Integer)comp_metrics.fallback_cover_zindex_last));
+  PUT_C(comp, "fallback_popup_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_popup_calls));
+  PUT_C(comp, "fallback_popup_ignored", INTEGER_OBJ((Integer)comp_metrics.fallback_popup_ignored));
+  PUT_C(comp, "fallback_external_calls", INTEGER_OBJ((Integer)comp_metrics.fallback_external_calls));
+  PUT_C(comp, "fallback_last_row_checked", INTEGER_OBJ((Integer)comp_metrics.fallback_last_row_checked));
+  PUT_C(comp, "fallback_msg_row", INTEGER_OBJ((Integer)comp_metrics.fallback_msg_row));
+  PUT_C(comp, "fallback_rows_argument", INTEGER_OBJ((Integer)comp_metrics.fallback_rows_argument));
+  PUT_C(comp, "msg_grid_handle", INTEGER_OBJ((Integer)msg_grid.handle));
+  PUT_C(rv, "ui_comp_scroll_fallback", DICT_OBJ(comp));
   return rv;
+}
+
+/// Resets compositor statistics collected via nvim__stats().
+void nvim__reset_ui_comp_stats(void)
+{
+  ui_comp_metrics_reset();
 }
 
 /// Gets a list of dictionaries representing attached UIs.
