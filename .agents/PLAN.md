@@ -42,26 +42,24 @@
 
 # Plan
 
-1. [x] Re-read environment and task instructions to ensure compliance constraints are satisfied.
-2. [x] Record current git status and outstanding changes relevant to performance work.
-3. [x] Inspect existing ./.agents/MEMORY.md and other persistent notes for performance context.
-4. [x] Survey project documentation (:help, CONTRIBUTING, profiling guides) for prior performance recommendations.
-5. [x] Search repository for profiling scripts or benchmark artifacts indicating known hotspots.
-6. [x] Use `rg --threads=8` to locate TODO/FIXME notes referencing performance.
-7. [x] Review recent git history for performance-related commits to avoid redundant ideas.
-8. [x] Map high-frequency runtime subsystems (event loop, redraw, UI) via source tree overview.
-9. [x] Analyze input and event processing pipeline for O(n) or blocking operations.
-10. [x] Inspect screen redraw logic for repeated work or avoidable recomputation.
-11. [x] Evaluate Tree-sitter integration for parser invalidation and highlight performance.
-12. [x] Assess Lua execution pathways, including RPC and `vim.loop`, for bottlenecks.
-13. [x] Examine LSP client scheduling and throttling mechanisms for potential improvements.
-14. [x] Use clangd MCP to trace hotspots’ call graphs and identify expensive loops.
-15. [x] Check async job/channel APIs for synchronization or polling inefficiencies.
-16. [x] Investigate filesystem watching and autocmd dispatch overhead.
-17. [x] Review memory allocation patterns that can amplify runtime costs.
-18. [x] Synthesize findings into prioritized performance improvement opportunities with estimated impact.
-19. [>] Update ./.agents/PLAN.md with current plan state for persistence.
-20. [ ] Prepare final report summarizing top dramatic performance improvement targets and next steps.
+1. [x] Reconfirm all user and developer instructions, constraints, and recent context for the current task.
+2. [x] Load ./.agents/PLAN.md to synchronize persistent planning state.
+3. [ ] Capture current git status and branch context to establish baseline.
+4. [ ] Inspect recent modifications in src/nvim/ui_compositor.c tied to overlay dirtiness and skip logic.
+5. [ ] Review corresponding declarations in src/nvim/ui_compositor.h for alignment with implementation.
+6. [ ] Survey src/nvim/grid.c changes to understand dirty-row propagation.
+7. [ ] Check src/nvim/grid_defs.h for structural or initialization changes tied to comp_row_dirty.
+8. [ ] Assess src/nvim/api/vim.c updates exposing overlay skip metrics.
+9. [ ] Identify other touched files (e.g., marktree, tui) for potential side effects on tests.
+10. [ ] Use clangd MCP to trace dirty-marking helper call sites and ensure coverage.
+11. [ ] Examine /tmp/unittest.log and related per-suite logs to characterize the unit test crash.
+12. [ ] Run a focused unit test (e.g., TEST_FILE=typval) to reproduce failure with detailed output.
+13. [ ] Determine whether compositor initialization happens during unit tests and locate crash source.
+14. [ ] Instrument or add logging (temporary if needed) to isolate failing path, then remove after diagnosis.
+15. [ ] Implement fix for dirty-row/compositor interaction causing unit-test crash.
+16. [ ] Re-run make unittest to confirm resolution.
+17. [ ] Verify targeted functional tests still pass after fix.
+18. [ ] Document remaining lint issue (upstream Stylua) and summarize outcomes for the user.
 
 # Notes
 
