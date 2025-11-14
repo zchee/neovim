@@ -67,12 +67,23 @@ typedef struct {
 
 static kvec_t(OverlaySpan) overlay_row_spans = KV_INITIAL_VALUE;
 
+static inline void ui_comp_clear_row_dirty(ScreenGrid *grid, int local_row)
+{
+  if (grid != NULL && grid->comp_row_dirty != NULL
+      && local_row >= 0 && local_row < grid->rows) {
+    grid->comp_row_dirty[local_row] = 0;
+  }
+  if (grid != NULL && grid->comp_dirty_start != NULL
+      && grid->comp_dirty_end != NULL
+      && local_row >= 0 && local_row < grid->rows) {
+    grid->comp_dirty_start[local_row] = grid->cols;
+    grid->comp_dirty_end[local_row] = 0;
+  }
+}
+
 void ui_comp_grid_mark_dirty(ScreenGrid *grid, int row)
 {
-#ifdef UNIT_TESTING
-  return;
-#endif
-  if (grid == NULL || grid == &default_grid) {
+  if (grid == NULL) {
     return;
   }
   if (grid->comp_row_dirty == NULL) {
@@ -88,10 +99,7 @@ void ui_comp_grid_mark_dirty(ScreenGrid *grid, int row)
 
 void ui_comp_grid_mark_all_dirty(ScreenGrid *grid)
 {
-#ifdef UNIT_TESTING
-  return;
-#endif
-  if (grid == NULL || grid == &default_grid) {
+  if (grid == NULL) {
     return;
   }
   if (grid->comp_row_dirty == NULL) {
@@ -803,9 +811,22 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
       && local_row >= 0 && local_row < curgrid->rows) {
     overlay_row_dirty = curgrid->comp_row_dirty[local_row] != 0;
   }
+  int dirty_start = (int)startcol;
+  int dirty_end = (int)endcol;
+  if (!overlay_grid && curgrid->comp_dirty_start != NULL
+      && curgrid->comp_dirty_end != NULL
+      && local_row >= 0 && local_row < curgrid->rows) {
+    int row_dirty_start = curgrid->comp_dirty_start[local_row];
+    int row_dirty_end = curgrid->comp_dirty_end[local_row];
+    if (row_dirty_start < row_dirty_end) {
+      dirty_start = row_dirty_start;
+      dirty_end = row_dirty_end;
+    }
+  }
   if (overlay_grid && (flags & kLineFlagInvalid) && !overlay_row_dirty) {
     ui_comp_metrics.overlay_skip_calls++;
     ui_comp_metrics.overlay_skip_rows++;
+    ui_comp_clear_row_dirty(curgrid, local_row);
     return;
   }
   // TODO(bfredl): eventually should just fix compose_line to respect clearing
@@ -813,10 +834,7 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
   if ((flags & kLineFlagInvalid) || curgrid->blending) {
     compose_debug(row, row + 1, startcol, clearcol, dbghl_composed, true);
     compose_line(row, startcol, clearcol, flags);
-    if (overlay_grid && curgrid->comp_row_dirty != NULL
-        && local_row >= 0 && local_row < curgrid->rows) {
-      curgrid->comp_row_dirty[local_row] = 0;
-    }
+    ui_comp_clear_row_dirty(curgrid, local_row);
     return;
   }
 
@@ -825,6 +843,7 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
     if (span_count == 0) {
       compose_debug(row, row + 1, startcol, clearcol, dbghl_composed, true);
       compose_line(row, startcol, clearcol, flags);
+      ui_comp_clear_row_dirty(curgrid, local_row);
       return;
     }
 
@@ -853,7 +872,8 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
         if (span_local_row >= 0 && span_local_row < span_grid->rows) {
           bool row_dirty = span_grid->comp_row_dirty != NULL
                            && span_grid->comp_row_dirty[span_local_row] != 0;
-          if (!row_dirty && !span_grid->blending) {
+          bool dirty_intersects_span = !(dirty_end <= span_start || dirty_start >= span_end);
+          if (!row_dirty && !span_grid->blending && !dirty_intersects_span) {
             span_skip = true;
           }
         }
@@ -884,10 +904,6 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
         }
         compose_line(row, span_start, span_end, flags);
         seg_cursor = span_end;
-        if (span_grid != NULL && span_grid->comp_row_dirty != NULL
-            && span_local_row >= 0 && span_local_row < span_grid->rows) {
-          span_grid->comp_row_dirty[span_local_row] = 0;
-        }
       }
     }
 
@@ -913,10 +929,6 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
       ui_composed_call_raw_line(1, row, clean_start, clean_start, clearcol, clearattr,
                                 flags, chunk + offset, attrs + offset);
     }
-    if (overlay_grid && curgrid->comp_row_dirty != NULL
-        && local_row >= 0 && local_row < curgrid->rows) {
-      curgrid->comp_row_dirty[local_row] = 0;
-    }
   } else {
     compose_debug(row, row + 1, startcol, endcol, dbghl_normal, endcol >= clearcol);
     compose_debug(row, row + 1, endcol, clearcol, dbghl_clear, true);
@@ -928,6 +940,8 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
     ui_composed_call_raw_line(1, row, startcol, endcol, clearcol, clearattr,
                               flags, chunk, attrs);
   }
+
+  ui_comp_clear_row_dirty(curgrid, local_row);
 }
 
 /// The screen is invalid and will soon be cleared
@@ -1046,9 +1060,7 @@ void ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left, I
   if (!ui_comp_should_draw() || !ui_comp_set_grid((int)grid)) {
     return;
   }
-  if (curgrid != &default_grid) {
-    ui_comp_grid_mark_all_dirty(curgrid);
-  }
+  ui_comp_grid_mark_all_dirty(curgrid);
   top += curgrid->comp_row;
   bot += curgrid->comp_row;
   left += curgrid->comp_col;
