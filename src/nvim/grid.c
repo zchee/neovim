@@ -842,7 +842,26 @@ void grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol
   }
 
   if (line_changed) {
+    if (grid->comp_dirty_start != NULL && grid->comp_dirty_end != NULL) {
+      int dirty_from = (start_dirty >= 0) ? start_dirty : clear_dirty_start;
+      int dirty_to = end_dirty;
+      if (dirty_from < 0) {
+        dirty_from = 0;
+      } else if (dirty_from > grid->cols) {
+        dirty_from = grid->cols;
+      }
+      if (dirty_to < dirty_from) {
+        dirty_to = dirty_from;
+      } else if (dirty_to > grid->cols) {
+        dirty_to = grid->cols;
+      }
+      grid->comp_dirty_start[row] = coloff + dirty_from;
+      grid->comp_dirty_end[row] = coloff + dirty_to;
+    }
     ui_comp_grid_mark_dirty(grid, row);
+  } else if (grid->comp_dirty_start != NULL && grid->comp_dirty_end != NULL) {
+    grid->comp_dirty_start[row] = grid->cols;
+    grid->comp_dirty_end[row] = 0;
   }
 }
 
@@ -863,12 +882,16 @@ void grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid)
   memset(ngrid.vcols, -1, ncells * sizeof(colnr_T));
   ngrid.line_offset = xmalloc((size_t)rows * sizeof(*ngrid.line_offset));
   ngrid.comp_row_dirty = xcalloc((size_t)rows, sizeof(*ngrid.comp_row_dirty));
+  ngrid.comp_dirty_start = xmalloc((size_t)rows * sizeof(*ngrid.comp_dirty_start));
+  ngrid.comp_dirty_end = xmalloc((size_t)rows * sizeof(*ngrid.comp_dirty_end));
 
   ngrid.rows = rows;
   ngrid.cols = columns;
 
   for (new_row = 0; new_row < ngrid.rows; new_row++) {
     ngrid.line_offset[new_row] = (size_t)new_row * (size_t)ngrid.cols;
+    ngrid.comp_dirty_start[new_row] = ngrid.cols;
+    ngrid.comp_dirty_end[new_row] = 0;
 
     grid_clear_line(&ngrid, ngrid.line_offset[new_row], columns, valid);
 
@@ -916,12 +939,16 @@ void grid_free(ScreenGrid *grid)
   xfree(grid->vcols);
   xfree(grid->line_offset);
   xfree(grid->comp_row_dirty);
+  xfree(grid->comp_dirty_start);
+  xfree(grid->comp_dirty_end);
 
   grid->chars = NULL;
   grid->attrs = NULL;
   grid->vcols = NULL;
   grid->line_offset = NULL;
   grid->comp_row_dirty = NULL;
+  grid->comp_dirty_start = NULL;
+  grid->comp_dirty_end = NULL;
 }
 
 #ifdef EXITFREE

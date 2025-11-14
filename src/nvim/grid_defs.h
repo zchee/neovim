@@ -60,6 +60,8 @@ struct ScreenGrid {
 
   // compositor row dirtiness tracking (optional).
   uint8_t *comp_row_dirty;
+  int *comp_dirty_start;
+  int *comp_dirty_end;
 
   // The state of the grid is valid. Otherwise it needs to be redrawn.
   bool valid;
@@ -103,7 +105,7 @@ struct ScreenGrid {
 };
 
 #define SCREEN_GRID_INIT { 0, NULL, NULL, NULL, NULL, NULL, 0, 0, NULL, \
-                           false, false, false, true, 0, \
+                           NULL, NULL, false, false, false, true, 0, \
                            0, 0, 0, 0, 0,  false, true }
 
 /// Represents the position of a viewport within a ScreenGrid
