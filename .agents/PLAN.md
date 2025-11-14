@@ -42,27 +42,32 @@
 
 # Plan
 
-1. [x] Reconfirm all user and developer instructions, constraints, and recent context for the current task.
-2. [x] Load ./.agents/PLAN.md to synchronize persistent planning state.
-3. [ ] Capture current git status and branch context to establish baseline.
-4. [ ] Inspect recent modifications in src/nvim/ui_compositor.c tied to overlay dirtiness and skip logic.
-5. [ ] Review corresponding declarations in src/nvim/ui_compositor.h for alignment with implementation.
-6. [ ] Survey src/nvim/grid.c changes to understand dirty-row propagation.
-7. [ ] Check src/nvim/grid_defs.h for structural or initialization changes tied to comp_row_dirty.
-8. [ ] Assess src/nvim/api/vim.c updates exposing overlay skip metrics.
-9. [ ] Identify other touched files (e.g., marktree, tui) for potential side effects on tests.
-10. [ ] Use clangd MCP to trace dirty-marking helper call sites and ensure coverage.
-11. [ ] Examine /tmp/unittest.log and related per-suite logs to characterize the unit test crash.
-12. [ ] Run a focused unit test (e.g., TEST_FILE=typval) to reproduce failure with detailed output.
-13. [ ] Determine whether compositor initialization happens during unit tests and locate crash source.
-14. [ ] Instrument or add logging (temporary if needed) to isolate failing path, then remove after diagnosis.
-15. [ ] Implement fix for dirty-row/compositor interaction causing unit-test crash.
-16. [ ] Re-run make unittest to confirm resolution.
-17. [ ] Verify targeted functional tests still pass after fix.
-18. [ ] Document remaining lint issue (upstream Stylua) and summarize outcomes for the user.
+1. [ ] Reconfirm all instructions/constraints before touching backlog item #2.
+2. [ ] Reload ./.agents/PLAN.md and vertex memory so both reflect the new plan.
+3. [ ] Capture git status/branch context before starting the next implementation.
+4. [ ] Restate backlog item #2 requirements (skip overlay recomposition when content is unchanged) with success criteria.
+5. [ ] Inventory current overlay data structures (grid metadata, comp_row_dirty, comp_dirty ranges) for reuse.
+6. [ ] Audit overlay creation/update paths (popupmenu, float windows, diagnostics, LSP) to identify where content dirtiness can be signaled.
+7. [ ] Design an overlay content epoch/hash that persists across scrolls/resizes so we can detect truly static overlays.
+8. [ ] Plan API hooks or helper functions to mark overlays dirty/clean when buffers or extmarks change.
+9. [ ] Extend `nvim__stats()` (or similar debug hook) to report overlay skip/dirty counters per overlay for observability.
+10. [ ] Outline tracing/logging needed to validate skip decisions during development/testing.
+11. [ ] Draft unit-test coverage (C tests) for the new overlay dirtiness helpers/metrics.
+12. [ ] Draft functional UI tests (screen specs) that keep overlays static while base grid scrolls, ensuring skips trigger.
+13. [ ] Define the performance instrumentation/benchmark plan to measure CPU savings after the change.
+14. [ ] List the verification suites that must run before/after implementation (`make unittest`, compositor UI specs, `ninja -C build lint`).
+15. [ ] Implement the content-dirty plumbing, metrics updates, and tests.
+16. [ ] Summarize outcomes, update documentation/Notes, and sync plan/memory after the work is complete.
 
 # Notes
 
 - Reverted commits `bd6dde201372`, `d1e23377e14f`, and `c4f478a1fc22` (`feat(api): add batched buffer byte updates` and related commentstring fixes) after regression in "add batched buffer byte updates"; branch `optimize` now includes three corresponding revert commits.
     - Additionally restored `test/functional/treesitter/utils_spec.lua` to its pre-`84754715cfa2` state after confirming tree-sitter utility tests pass with the adjusted `_range.add_bytes` fix.
 - clangd MCP queries currently lack compile_commands coverage (no symbol resolution); further analysis may require generating the build database.
+- `ninja -C build lint` currently fails inside the `lintc-clint` phase: `clint.py` reports "Function attribute line should have 2-space indent" for `src/nvim/tui/tui.c:179`. The failure is captured in `/tmp/lint_run.log`; we need to either fix the indentation or carry the exception until upstream style guidance changes.
+- Stylua/luacheck passes locally; the remaining backlog work shifts to backlog item #2 (skip recomposition when overlay content is unchanged). Proposed subtasks:
+    1. Extend overlay grid metadata with an explicit "content dirty" epoch/hash that survives scrolls so we can detect when a floating window truly changed.
+    2. Plumb overlay dirtiness notifications from buffer/window APIs (extmark, popup, LSP, UI events) into the compositor so skip decisions have authoritative data.
+    3. Teach `nvim__stats()` (or a new debug hook) to report overlay skip/dirty counters per overlay so regressions are visible.
+    4. Add functional coverage (UI screen tests) where overlay contents stay static while the base grid scrolls, ensuring skip logic holds across multiple event sources.
+- Verification matrix before/after tackling backlog item #2: `make unittest`, `TEST_FILE=test/functional/ui/compositor_prune_spec.lua make functionaltest-lua`, `ninja -C build lint`, and a targeted multigrid UI spec to ensure overlay skip counters still increment.
