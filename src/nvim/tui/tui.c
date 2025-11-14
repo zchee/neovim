@@ -175,8 +175,10 @@ static bool cursor_style_enabled = false;
 
 #define TERMINFO_SEQ_LIMIT 128
 
-static void terminfo_cache_entry(TUIData *tui, TerminfoDef what) FUNC_ATTR_NONNULL_ALL;
-static void terminfo_cache_all(TUIData *tui) FUNC_ATTR_NONNULL_ALL;
+static void terminfo_cache_entry(TUIData *tui, TerminfoDef what)
+  FUNC_ATTR_NONNULL_ALL;
+static void terminfo_cache_all(TUIData *tui)
+  FUNC_ATTR_NONNULL_ALL;
 
 #define terminfo_print_num1(tui, what, num) terminfo_print_num(tui, what, num, 0, 0)
 #define terminfo_print_num2(tui, what, num1, num2) terminfo_print_num(tui, what, num1, num2, 0)
