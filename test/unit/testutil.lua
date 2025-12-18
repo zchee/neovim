@@ -13,6 +13,10 @@ local map = vim.tbl_map
 local eq = t_global.eq
 local trim = vim.trim
 
+ffi.cdef([[
+void xfree(void *ptr);
+]])
+
 -- add some standard header locations
 for _, p in ipairs(paths.include_paths) do
   Preprocess.add_to_include_path(p)
@@ -415,7 +419,11 @@ end
 -- take a pointer to a C-allocated string and return an interned
 -- version while also freeing the memory
 local function internalize(cdata, len)
-  ffi.gc(cdata, ffi.C.free)
+  -- Many Neovim helpers return strings allocated with xmalloc(). In this worktree,
+  -- xmalloc() is backed by mimalloc, so using libc `free()` here can crash due to
+  -- allocator mismatch. `xfree()` safely handles both Neovim-owned allocations
+  -- and (when needed) system-allocator pointers.
+  ffi.gc(cdata, ffi.C.xfree)
   return ffi.string(cdata, len)
 end
 

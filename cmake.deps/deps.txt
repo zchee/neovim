@@ -32,6 +32,9 @@ LIBICONV_SHA256 8f74213b56238c85a50a5329f77e06198771e70dd9a739779f4c02f65d971313
 UTF8PROC_URL https://github.com/JuliaStrings/utf8proc/archive/master.tar.gz
 UTF8PROC_SHA256 SKIP
 
+MIMALLOC_URL https://github.com/microsoft/mimalloc/archive/refs/heads/dev3.tar.gz
+MIMALLOC_SHA256 SKIP
+
 TREESITTER_C_URL https://github.com/tree-sitter/tree-sitter-c/archive/master.tar.gz
 TREESITTER_C_SHA256 SKIP
 TREESITTER_LUA_URL https://github.com/tree-sitter-grammars/tree-sitter-lua/archive/main.tar.gz

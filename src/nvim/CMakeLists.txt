@@ -34,6 +34,13 @@ find_package(Lpeg REQUIRED)
 find_package(Treesitter 0.25.0 REQUIRED)
 find_package(UTF8proc REQUIRED)
 
+option(ENABLE_MIMALLOC "Use mimalloc as the Neovim memory allocator." ON)
+if(ENABLE_MIMALLOC)
+  find_package(Mimalloc REQUIRED)
+  target_link_libraries(main_lib INTERFACE mimalloc)
+  target_compile_definitions(main_lib INTERFACE NVIM_USE_MIMALLOC)
+endif()
+
 target_link_libraries(main_lib INTERFACE
   iconv
   lpeg
