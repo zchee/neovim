@@ -8,6 +8,10 @@
 #include <string.h>
 #include <time.h>
 
+#ifdef NVIM_USE_MIMALLOC
+# include <mimalloc.h>
+#endif
+
 #include "nvim/api/extmark.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/api/ui.h"
@@ -44,15 +48,159 @@
 #include "nvim/usercmd.h"
 
 #ifdef UNIT_TESTING
-# define malloc(size) mem_malloc(size)
-# define calloc(count, size) mem_calloc(count, size)
-# define realloc(ptr, size) mem_realloc(ptr, size)
-# define free(ptr) mem_free(ptr)
+# ifdef NVIM_USE_MIMALLOC
+MemMalloc mem_malloc = &mi_malloc;
+MemFree mem_free = &mi_free;
+MemCalloc mem_calloc = &mi_calloc;
+MemRealloc mem_realloc = &mi_realloc;
+# else
 MemMalloc mem_malloc = &malloc;
 MemFree mem_free = &free;
 MemCalloc mem_calloc = &calloc;
 MemRealloc mem_realloc = &realloc;
+# endif
 #endif
+
+static inline void *mem_backend_malloc(size_t size)
+{
+#ifdef UNIT_TESTING
+  return mem_malloc(size);
+#elif defined(NVIM_USE_MIMALLOC)
+  return mi_malloc(size);
+#else
+  return malloc(size);
+#endif
+}
+
+static inline void *mem_backend_calloc(size_t count, size_t size)
+{
+#ifdef UNIT_TESTING
+  return mem_calloc(count, size);
+#elif defined(NVIM_USE_MIMALLOC)
+  return mi_calloc(count, size);
+#else
+  return calloc(count, size);
+#endif
+}
+
+static inline void *mem_backend_realloc(void *ptr, size_t size)
+{
+#ifdef UNIT_TESTING
+  // In unit tests, pointers can come from external libraries (system allocator)
+  // as well as from Neovim (mimalloc). Ensure we call the matching realloc.
+# ifdef NVIM_USE_MIMALLOC
+  if (ptr != NULL && !mi_usable_size(ptr)) {
+    return realloc(ptr, size);
+  }
+# endif
+  return mem_realloc(ptr, size);
+#elif defined(NVIM_USE_MIMALLOC)
+  if (ptr != NULL && !mi_usable_size(ptr)) {
+    return realloc(ptr, size);
+  }
+  return mi_realloc(ptr, size);
+#else
+  return realloc(ptr, size);
+#endif
+}
+
+static inline void mem_backend_free(void *ptr)
+{
+#ifdef UNIT_TESTING
+  // In unit tests, pointers can come from external libraries (system allocator)
+  // as well as from Neovim (mimalloc). Ensure we call the matching free.
+# ifdef NVIM_USE_MIMALLOC
+  if (ptr != NULL && !mi_usable_size(ptr)) {
+    free(ptr);
+    return;
+  }
+# endif
+  mem_free(ptr);
+#elif defined(NVIM_USE_MIMALLOC)
+  if (ptr != NULL && !mi_usable_size(ptr)) {
+    free(ptr);
+    return;
+  }
+  mi_free(ptr);
+#else
+  free(ptr);
+#endif
+}
+
+void nvim_mem_init(void)
+{
+#ifdef NVIM_USE_MIMALLOC
+  static bool did_init = false;
+  if (did_init) {
+    return;
+  }
+  did_init = true;
+
+// // Recommended by mimalloc docs for non-overcommit systems (explicitly mentions macOS).
+// // Improves performance by committing arenas eagerly.
+// mi_option_set_default(mi_option_arena_eager_commit, 2);
+
+// // Recommended by mimalloc docs as a performance knob: higher values reduce purging frequency.
+// mi_option_set_default(mi_option_purge_delay, 100);
+
+# ifdef __APPLE__
+#define MI_DEFAULT_PAGEMAP_COMMIT 1
+  // Recommended by mimalloc docs for non-overcommit systems (explicitly mentions macOS).
+  // Improves performance by committing arenas eagerly.
+  mi_option_set_default(mi_option_arena_eager_commit, 1);
+
+  // page_commit_on_demand: On-demand commit (default 0).
+  // It is safe to leave it disabled on macOS.
+  mi_option_set_default(mi_option_page_commit_on_demand, 0);
+
+  // Recommended by mimalloc docs as a performance knob: higher values reduce purging frequency.
+  mi_option_set_default(mi_option_purge_delay, 100);
+
+  // purge_decommits: Whether to decommit when purging (default 1).
+  // On macOS, use MADV_FREE_REUSABLE for more accurate RSS measurements.
+  mi_option_set_default(mi_option_purge_decommits, 1);
+
+  // arena_purge_mult: Arena purge multiplier (default 1).
+  // A higher value reduces the purge frequency. A value of around 3 is appropriate for Neovim.
+  mi_option_set_default(mi_option_arena_purge_mult, 3);
+
+  // minimal_purge_size: Minimum purge size (default 0)
+  // Ignore small frees to reduce overhead.
+  // Ignore frees of 128KB or less.
+  mi_option_set_default(mi_option_minimal_purge_size, 128);
+
+  // page_reclaim_on_free: Reclaim abandoned pages on free (default 0).
+  // Enable this setting since Neovim is primarily single-threaded.
+  mi_option_set_default(mi_option_page_reclaim_on_free, 1);
+
+  // arena_reserve: Initial arena reservation size
+  // Default 1GiB. 256 MiB is sufficient for Neovim.
+  mi_option_set_default(mi_option_arena_reserve, 256 * 1024 * 1024);
+# endif
+
+  mi_process_init();
+#endif
+}
+
+bool nvim_mimalloc_enabled(void)
+{
+#ifdef NVIM_USE_MIMALLOC
+  return true;
+#else
+  return false;
+#endif
+}
+
+bool nvim_mimalloc_check_owned(const void *ptr)
+{
+#ifdef NVIM_USE_MIMALLOC
+  nvim_mem_init();
+  return mi_usable_size(ptr) != 0U;
+#else
+  (void)ptr;
+  return false;
+#endif
+}
 
 #include "memory.c.generated.h"
 
@@ -110,10 +258,10 @@ static void do_outofmem_msg(size_t size)
 void *try_malloc(size_t size) FUNC_ATTR_MALLOC FUNC_ATTR_ALLOC_SIZE(1)
 {
   size_t allocated_size = size ? size : 1;
-  void *ret = malloc(allocated_size);
+  void *ret = mem_backend_malloc(allocated_size);
   if (!ret) {
     try_to_free_memory();
-    ret = malloc(allocated_size);
+    ret = mem_backend_malloc(allocated_size);
   }
   return ret;
 }
@@ -141,8 +289,7 @@ void *verbose_try_malloc(size_t size) FUNC_ATTR_MALLOC FUNC_ATTR_ALLOC_SIZE(1)
 /// @see {try_to_free_memory}
 /// @param size
 /// @return pointer to allocated space. Never NULL
-void *xmalloc(size_t size)
-  FUNC_ATTR_MALLOC FUNC_ATTR_ALLOC_SIZE(1) FUNC_ATTR_NONNULL_RET
+void *xmalloc(size_t size) FUNC_ATTR_MALLOC FUNC_ATTR_ALLOC_SIZE(1) FUNC_ATTR_NONNULL_RET
 {
   void *ret = try_malloc(size);
   if (!ret) {
@@ -156,7 +303,7 @@ void *xmalloc(size_t size)
 /// @note Use XFREE_CLEAR() instead, if possible.
 void xfree(void *ptr)
 {
-  free(ptr);
+  mem_backend_free(ptr);
 }
 
 /// calloc() wrapper
@@ -165,15 +312,15 @@ void xfree(void *ptr)
 /// @param count
 /// @param size
 /// @return pointer to allocated space. Never NULL
-void *xcalloc(size_t count, size_t size)
-  FUNC_ATTR_MALLOC FUNC_ATTR_ALLOC_SIZE_PROD(1, 2) FUNC_ATTR_NONNULL_RET
+void *xcalloc(size_t count, size_t size) FUNC_ATTR_MALLOC
+  FUNC_ATTR_ALLOC_SIZE_PROD(1, 2) FUNC_ATTR_NONNULL_RET
 {
   size_t allocated_count = count && size ? count : 1;
   size_t allocated_size = count && size ? size : 1;
-  void *ret = calloc(allocated_count, allocated_size);
+  void *ret = mem_backend_calloc(allocated_count, allocated_size);
   if (!ret) {
     try_to_free_memory();
-    ret = calloc(allocated_count, allocated_size);
+    ret = mem_backend_calloc(allocated_count, allocated_size);
     if (!ret) {
       preserve_exit(e_outofmem);
     }
@@ -186,14 +333,14 @@ void *xcalloc(size_t count, size_t size)
 /// @see {xmalloc}
 /// @param size
 /// @return pointer to reallocated space. Never NULL
-void *xrealloc(void *ptr, size_t size)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_ALLOC_SIZE(2) FUNC_ATTR_NONNULL_RET
+void *xrealloc(void *ptr, size_t size) FUNC_ATTR_WARN_UNUSED_RESULT
+  FUNC_ATTR_ALLOC_SIZE(2) FUNC_ATTR_NONNULL_RET
 {
   size_t allocated_size = size ? size : 1;
-  void *ret = realloc(ptr, allocated_size);
+  void *ret = mem_backend_realloc(ptr, allocated_size);
   if (!ret) {
     try_to_free_memory();
-    ret = realloc(ptr, allocated_size);
+    ret = mem_backend_realloc(ptr, allocated_size);
     if (!ret) {
       preserve_exit(e_outofmem);
     }
@@ -208,8 +355,7 @@ void *xrealloc(void *ptr, size_t size)
 /// @see {xmalloc}
 /// @param size
 /// @return pointer to allocated space. Never NULL
-void *xmallocz(size_t size)
-  FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
+void *xmallocz(size_t size) FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
 {
   size_t total_size = size + 1;
   if (total_size < size) {
@@ -231,8 +377,7 @@ void *xmallocz(size_t size)
 /// @param data Pointer to the data that will be copied
 /// @param len number of bytes that will be copied
 void *xmemdupz(const void *data, size_t len)
-  FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
-  FUNC_ATTR_NONNULL_ALL
+  FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
   return memcpy(xmallocz(len), data, len);
 }
@@ -243,8 +388,7 @@ void *xmemdupz(const void *data, size_t len)
 /// @param[out]  dst  Buffer to store the result.
 /// @param[in]  src  Buffer to be copied.
 /// @param[in]  len  Number of bytes to be copied.
-void *xmemcpyz(void *dst, const void *src, size_t len)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
+void *xmemcpyz(void *dst, const void *src, size_t len) FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
   memcpy(dst, src, len);
   ((char *)dst)[len] = NUL;
@@ -252,8 +396,7 @@ void *xmemcpyz(void *dst, const void *src, size_t len)
 }
 
 #ifndef HAVE_STRNLEN
-size_t xstrnlen(const char *s, size_t n)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
+size_t xstrnlen(const char *s, size_t n) FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
   const char *end = memchr(s, NUL, n);
   if (end == NULL) {
@@ -270,8 +413,7 @@ size_t xstrnlen(const char *s, size_t n)
 /// @param c   The char to look for.
 /// @returns a pointer to the first instance of `c`, or to the NUL terminator
 ///          if not found.
-char *xstrchrnul(const char *str, char c)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
+char *xstrchrnul(const char *str, char c) FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
   const char *p = strchr(str, c);
   return p ? (char *)p : (char *)(str + strlen(str));
@@ -285,8 +427,8 @@ char *xstrchrnul(const char *str, char c)
 /// @param size The size of the memory object.
 /// @returns a pointer to the first instance of `c`, or one past the end if not
 ///          found.
-void *xmemscan(const void *addr, char c, size_t size)
-  FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
+void *xmemscan(const void *addr, char c,
+               size_t size) FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
   const char *p = memchr(addr, c, size);
   return p ? (char *)p : (char *)addr + size;
@@ -299,8 +441,7 @@ void *xmemscan(const void *addr, char c, size_t size)
 /// @param str A NUL-terminated string.
 /// @param c   The unwanted byte.
 /// @param x   The replacement.
-void strchrsub(char *str, char c, char x)
-  FUNC_ATTR_NONNULL_ALL
+void strchrsub(char *str, char c, char x) FUNC_ATTR_NONNULL_ALL
 {
   assert(c != NUL);
   while ((str = strchr(str, c))) {
@@ -314,8 +455,7 @@ void strchrsub(char *str, char c, char x)
 /// @param c    The unwanted byte.
 /// @param x    The replacement.
 /// @param len  The length of data.
-void memchrsub(void *data, char c, char x, size_t len)
-  FUNC_ATTR_NONNULL_ALL
+void memchrsub(void *data, char c, char x, size_t len) FUNC_ATTR_NONNULL_ALL
 {
   char *p = data;
   char *end = (char *)data + len;
@@ -331,8 +471,7 @@ void memchrsub(void *data, char c, char x, size_t len)
 /// @param str Pointer to the string to search.
 /// @param c   The byte to search for.
 /// @returns the number of occurrences of `c` in `str`.
-size_t strcnt(const char *str, char c)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
+size_t strcnt(const char *str, char c) FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
   assert(c != 0);
   size_t cnt = 0;
@@ -349,8 +488,7 @@ size_t strcnt(const char *str, char c)
 /// @param c    The byte to search for.
 /// @param len  The length of `data`.
 /// @returns the number of occurrences of `c` in `data[len]`.
-size_t memcnt(const void *data, char c, size_t len)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
+size_t memcnt(const void *data, char c, size_t len) FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
   size_t cnt = 0;
   const char *ptr = data;
@@ -426,8 +564,7 @@ char *xstpncpy(char *restrict dst, const char *restrict src, size_t maxlen)
 ///
 /// @return Length of `src`. May be greater than `dsize - 1`, which would mean
 ///         that string was truncated.
-size_t xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize)
-  FUNC_ATTR_NONNULL_ALL
+size_t xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize) FUNC_ATTR_NONNULL_ALL
 {
   size_t slen = strlen(src);
 
@@ -454,8 +591,7 @@ size_t xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize)
 /// @return Length of the resulting string as if destination size was #SIZE_MAX.
 ///         May be greater than `dsize - 1`, which would mean that string was
 ///         truncated.
-size_t xstrlcat(char *const dst, const char *const src, const size_t dsize)
-  FUNC_ATTR_NONNULL_ALL
+size_t xstrlcat(char *const dst, const char *const src, const size_t dsize) FUNC_ATTR_NONNULL_ALL
 {
   assert(dsize > 0);
   const size_t dlen = strlen(dst);
@@ -478,8 +614,7 @@ size_t xstrlcat(char *const dst, const char *const src, const size_t dsize)
 /// @param str 0-terminated string that will be copied
 /// @return pointer to a copy of the string
 char *xstrdup(const char *str)
-  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_RET
-  FUNC_ATTR_NONNULL_ALL
+  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL
 {
   return xmemdupz(str, strlen(str));
 }
@@ -504,8 +639,7 @@ char *xstrdupnul(const char *const str)
 /// @param c   The byte to search for.
 /// @param len The length of the memory object.
 /// @returns a pointer to the found byte in src[len], or NULL.
-void *xmemrchr(const void *src, uint8_t c, size_t len)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
+void *xmemrchr(const void *src, uint8_t c, size_t len) FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
   while (len--) {
     if (((uint8_t *)src)[len] == c) {
@@ -521,8 +655,7 @@ void *xmemrchr(const void *src, uint8_t c, size_t len)
 /// @param str 0-terminated string that will be copied
 /// @return pointer to a copy of the string
 char *xstrndup(const char *str, size_t len)
-  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_RET
-  FUNC_ATTR_NONNULL_ALL
+  FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL
 {
   const char *p = memchr(str, NUL, len);
   return xmemdupz(str, p ? (size_t)(p - str) : len);
@@ -534,25 +667,22 @@ char *xstrndup(const char *str, size_t len)
 /// @param data pointer to the chunk
 /// @param len size of the chunk
 /// @return a pointer
-void *xmemdup(const void *data, size_t len)
-  FUNC_ATTR_MALLOC FUNC_ATTR_ALLOC_SIZE(2) FUNC_ATTR_NONNULL_RET
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
+void *xmemdup(const void *data, size_t len) FUNC_ATTR_MALLOC
+  FUNC_ATTR_ALLOC_SIZE(2) FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
   return memcpy(xmalloc(len), data, len);
 }
 
 /// Returns true if strings `a` and `b` are equal. Arguments may be NULL.
-bool strequal(const char *a, const char *b)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+bool strequal(const char *a, const char *b) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return (a == NULL && b == NULL) || (a && b && strcmp(a, b) == 0);
+  return ((a == NULL && b == NULL) || (a && b && strcmp(a, b) == 0)) != 0;
 }
 
 /// Returns true if first `n` characters of strings `a` and `b` are equal. Arguments may be NULL.
-bool strnequal(const char *a, const char *b, size_t n)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+bool strnequal(const char *a, const char *b, size_t n) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return (a == NULL && b == NULL) || (a && b && strncmp(a, b, n) == 0);
+  return ((a == NULL && b == NULL) || (a && b && strncmp(a, b, n) == 0)) != 0;
 }
 
 /// Writes time_t to "buf[8]".
@@ -745,7 +875,7 @@ void *arena_alloc(Arena *arena, size_t size, bool align)
   if (!arena->cur_blk) {
     arena_alloc_block(arena);
   }
-  size_t alloc_pos = align ? arena_align_offset(arena->pos) : arena->pos;
+  size_t alloc_pos = (int)align ? arena_align_offset(arena->pos) : arena->pos;
   if (alloc_pos + size > arena->size) {
     if (size > (ARENA_BLOCK_SIZE - sizeof(struct consumed_blk)) >> 1) {
       // if allocation is too big, allocate a large block with the requested
@@ -754,7 +884,7 @@ void *arena_alloc(Arena *arena, size_t size, bool align)
       // small allocation in the current block.
       arena_alloc_count++;
       size_t hdr_size = sizeof(struct consumed_blk);
-      size_t aligned_hdr_size = (align ? arena_align_offset(hdr_size) : hdr_size);
+      size_t aligned_hdr_size = ((int)align ? arena_align_offset(hdr_size) : hdr_size);
       char *alloc = xmalloc(size + aligned_hdr_size);
 
       // to simplify free-list management, arena->cur_blk must
@@ -766,7 +896,7 @@ void *arena_alloc(Arena *arena, size_t size, bool align)
       return alloc + aligned_hdr_size;
     } else {
       arena_alloc_block(arena);  // resets arena->pos
-      alloc_pos = align ? arena_align_offset(arena->pos) : arena->pos;
+      alloc_pos = (int)align ? arena_align_offset(arena->pos) : arena->pos;
     }
   }
 
@@ -812,16 +942,14 @@ char *arena_allocz(Arena *arena, size_t size)
   return mem;
 }
 
-char *arena_memdupz(Arena *arena, const char *buf, size_t size)
-  FUNC_ATTR_NONNULL_ARG(2)
+char *arena_memdupz(Arena *arena, const char *buf, size_t size) FUNC_ATTR_NONNULL_ARG(2)
 {
   char *mem = arena_allocz(arena, size);
   memcpy(mem, buf, size);
   return mem;
 }
 
-char *arena_strdup(Arena *arena, const char *str)
-  FUNC_ATTR_NONNULL_ARG(2)
+char *arena_strdup(Arena *arena, const char *str) FUNC_ATTR_NONNULL_ARG(2)
 {
   return arena_memdupz(arena, str, strlen(str));
 }
@@ -917,7 +1045,7 @@ void free_all_mem(void)
   if (curtab != NULL) {
     diff_clear(curtab);
   }
-  clear_sb_text(true);            // free any scrollback text
+  clear_sb_text(true);  // free any scrollback text
 
   // Free some global vars.
   xfree(last_cmdline);

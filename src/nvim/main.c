@@ -154,6 +154,7 @@ static const char *err_extra_cmd =
 
 void event_init(void)
 {
+  nvim_mem_init();
   loop_init(&main_loop, NULL);
   env_init();
   resize_events = multiqueue_new_child(main_loop.events);
@@ -255,6 +256,8 @@ int main(int argc, char **argv)
 {
   argv0 = argv[0];
   TO_SLASH(argv0);
+
+  nvim_mem_init();
 
   if (!appname_is_valid()) {
     fprintf(stderr, "$NVIM_APPNAME must be a name or relative path.\n");
