@@ -9,6 +9,14 @@
 #include <string.h>
 #include <uv.h>
 
+#ifndef MSWIN
+# include <errno.h>
+# include <fcntl.h>
+# include <sys/socket.h>
+# include <sys/stat.h>
+# include <unistd.h>
+#endif
+
 #include "auto/config.h"
 #include "klib/kvec.h"
 #include "nvim/api/private/defs.h"
@@ -90,6 +98,14 @@ struct TUIData {
   kvec_t(Rect) invalid_regions;
   int row, col;
   int out_fd;
+  // kitty out-of-band bulk channel (KITTY_TUI_OOB_FD): when armed,
+  // flush_buf routes the rendered buffer to this socketpair instead of
+  // the tty. Everything else (termios, ioctls, tui_ui_send, input,
+  // signals, winsize) stays on the real tty.
+  int oob_fd;        ///< channel fd, -1 when unavailable
+  bool oob_inited;   ///< handshake attempted (once per process)
+  bool oob_ready;    ///< armed by a real mode-enter; the NULL mode reset disarms
+  bool oob_broken;   ///< sticky fail-open: a write error reverted this session to the tty
   int pending_resize_events;
   bool terminfo_found_in_db;
   bool can_change_scroll_region;
@@ -490,6 +506,14 @@ static void terminfo_start(TUIData *tui)
   tui->out_fd = STDOUT_FILENO;
   tui->out_isatty = os_isatty(tui->out_fd);
   tui->input.tui_data = tui;
+
+  // kitty OOB bulk channel: (re)start disarmed so startup/resume queries
+  // stay on the tty; the handshake itself happens once per process.
+  tui->oob_ready = false;
+  if (!tui->oob_inited) {
+    tui->oob_inited = true;
+    tui_oob_init(tui);
+  }
 
   tui->ti_arena = (Arena)ARENA_EMPTY;
   assert(tui->term == NULL);
@@ -1563,6 +1587,11 @@ void tui_mode_change(TUIData *tui, String mode, Integer mode_idx)
     }
   }
   tui->is_starting = false;  // mode entered, no longer starting
+  // kitty OOB bulk channel: a real mode-enter means every startup (or
+  // resume-from-suspend) query has already been issued on the tty — arm
+  // the channel. The NULL_STRING mode reset from terminfo_disable
+  // disarms it so suspend/exit teardown sequences drain through the tty.
+  tui->oob_ready = mode.size > 0 && tui->oob_fd >= 0 && !tui->oob_broken;
   tui->showing_mode = (ModeShape)mode_idx;
 }
 
@@ -2565,6 +2594,104 @@ static bool should_invisible(TUIData *tui)
   return tui->busy || tui->want_invisible;
 }
 
+/// kitty out-of-band bulk channel (KITTY_TUI_OOB_FD): a socketpair end
+/// inherited from kitty that carries the rendered TUI byte stream past
+/// the 1024-byte kernel pty queue. The pty remains the controlling
+/// terminal: input, signals, winsize, termios and every write outside
+/// flush_buf stay on the real tty. The handshake is sent once here;
+/// output is not routed until a real editor mode has been entered (see
+/// tui_mode_change), and any error permanently reverts to the tty.
+static void tui_oob_init(TUIData *tui)
+{
+  tui->oob_fd = -1;
+  tui->oob_ready = false;
+  tui->oob_broken = false;
+#ifndef MSWIN
+  if (!tui->out_isatty) {
+    return;
+  }
+  const char *fdstr = os_getenv("KITTY_TUI_OOB_FD");
+  if (fdstr == NULL) {
+    return;
+  }
+  // A terminal multiplexer owns the tty: the inherited fd (if open at
+  // all) may belong to a different kitty window. Never use it.
+  if (os_env_exists("TMUX", false) || os_env_exists("STY", false)) {
+    return;
+  }
+  const int fd = (int)strtol(fdstr, NULL, 10);
+  struct stat st;
+  if (fd < 0 || fstat(fd, &st) != 0 || !S_ISSOCK(st.st_mode)) {
+    return;
+  }
+#ifdef SO_NOSIGPIPE
+  const int on = 1;
+  setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#endif
+  const int flags = fcntl(fd, F_GETFL);
+  if (flags >= 0 && (flags & O_NONBLOCK)) {
+    // channel backpressure must block like a slow tty, not spin
+    fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+  }
+  static const char handshake[10] = { 'K', 'O', 'O', 'B', '1', '\n', 0, 0, 0, 0 };
+  size_t off = 0;
+  while (off < sizeof(handshake)) {
+    const ssize_t n = write(fd, handshake + off, sizeof(handshake) - off);
+    if (n > 0) {
+      off += (size_t)n;
+      continue;
+    }
+    if (n < 0 && errno == EINTR) {
+      continue;
+    }
+    return;  // handshake failed: leave the channel unused (fail-open)
+  }
+  tui->oob_fd = fd;
+  ILOG("kitty OOB bulk channel enabled on fd %d", fd);
+#endif
+}
+
+/// Writes the flush buffers to the OOB bulk channel when it is armed.
+///
+/// @return how many leading buffers were fully written. On a write error
+/// the channel is marked broken (sticky), the failing buffer is adjusted
+/// to its unwritten remainder, and the caller finishes this same flush
+/// on the tty: fail-open with no byte lost or duplicated.
+static unsigned tui_oob_write(TUIData *tui, uv_buf_t *bufs, unsigned nbufs)
+{
+#ifndef MSWIN
+  if (tui->oob_fd < 0 || tui->oob_broken || !tui->oob_ready) {
+    return 0;
+  }
+  for (unsigned i = 0; i < nbufs; i++) {
+    size_t off = 0;
+    while (off < bufs[i].len) {
+      const ssize_t n = write(tui->oob_fd, bufs[i].base + off, bufs[i].len - off);
+      if (n > 0) {
+        off += (size_t)n;
+        continue;
+      }
+      if (n < 0 && errno == EINTR) {
+        continue;
+      }
+      tui->oob_broken = true;
+      tui->oob_ready = false;
+      ELOG("kitty OOB channel write failed (%s); reverting to the tty",
+           n < 0 ? strerror(errno) : "short write");
+      bufs[i].base += off;
+      bufs[i].len = UV_BUF_LEN(bufs[i].len - off);
+      return i;
+    }
+  }
+  return nbufs;
+#else
+  (void)tui;
+  (void)bufs;
+  (void)nbufs;
+  return 0;
+#endif
+}
+
 /// Flushes the rendered buffer to the TTY.
 ///
 /// @see tui_flush
@@ -2648,8 +2775,12 @@ static void flush_buf(TUIData *tui, FlushBufFinish finish)
     while (nbufs > 0 && bufs[nbufs - 1].len == 0) {
       nbufs--;  // Trim trailing zero-length buffers. https://github.com/libuv/libuv/issues/5182
     }
-    if (nbufs > 0) {
-      int ret = uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs, nbufs, NULL);
+    // kitty OOB bulk channel: route the rendered bytes past the kernel pty
+    // queue when armed; on any error finish this same flush on the tty.
+    const unsigned oob_done = tui_oob_write(tui, bufs, nbufs);
+    if (oob_done < nbufs) {
+      int ret = uv_write(&req, (uv_stream_t *)&tui->output_handle, bufs + oob_done, nbufs - oob_done,
+                         NULL);
       if (ret) {
         ELOG("uv_write failed: %s", uv_strerror(ret));
       }
