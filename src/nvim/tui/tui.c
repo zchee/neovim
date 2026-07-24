@@ -2610,14 +2610,22 @@ static void tui_oob_init(TUIData *tui)
   if (!tui->out_isatty) {
     return;
   }
-  const char *fdstr = os_getenv("KITTY_TUI_OOB_FD");
+  // R3T M2 source selection: a TMUX_TUI_OOB_FD offer comes from the tmux
+  // server that owns this pane's tty, so it is trustworthy under $TMUX --
+  // unlike an inherited kitty fd, which may belong to a different kitty
+  // window when a multiplexer sits in between. Prefer the pane offer;
+  // keep the original refusal for the kitty variable under TMUX/STY.
+  const char *fdstr = os_getenv("TMUX_TUI_OOB_FD");
   if (fdstr == NULL) {
-    return;
-  }
-  // A terminal multiplexer owns the tty: the inherited fd (if open at
-  // all) may belong to a different kitty window. Never use it.
-  if (os_env_exists("TMUX", false) || os_env_exists("STY", false)) {
-    return;
+    fdstr = os_getenv("KITTY_TUI_OOB_FD");
+    if (fdstr == NULL) {
+      return;
+    }
+    // A terminal multiplexer owns the tty: the inherited fd (if open at
+    // all) may belong to a different kitty window. Never use it.
+    if (os_env_exists("TMUX", false) || os_env_exists("STY", false)) {
+      return;
+    }
   }
   const int fd = (int)strtol(fdstr, NULL, 10);
   struct stat st;
@@ -2647,6 +2655,11 @@ static void tui_oob_init(TUIData *tui)
     return;  // handshake failed: leave the channel unused (fail-open)
   }
   tui->oob_fd = fd;
+  // R3T M2 hygiene: children (e.g. :terminal jobs) must inherit neither
+  // the descriptor nor a booby-trap variable pointing at it.
+  (void)fcntl(fd, F_SETFD, FD_CLOEXEC);
+  os_unsetenv("TMUX_TUI_OOB_FD");
+  os_unsetenv("KITTY_TUI_OOB_FD");
   ILOG("kitty OOB bulk channel enabled on fd %d", fd);
 #endif
 }
