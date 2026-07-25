@@ -103,7 +103,7 @@ struct TUIData {
   // the tty. Everything else (termios, ioctls, tui_ui_send, input,
   // signals, winsize) stays on the real tty.
   int oob_fd;        ///< channel fd, -1 when unavailable
-  bool oob_inited;   ///< handshake attempted (once per process)
+  bool oob_inited;   ///< channel init attempted (once per process)
   bool oob_ready;    ///< armed by a real mode-enter; the NULL mode reset disarms
   bool oob_broken;   ///< sticky fail-open: a write error reverted this session to the tty
   int pending_resize_events;
@@ -2598,7 +2598,8 @@ static bool should_invisible(TUIData *tui)
 /// inherited from kitty that carries the rendered TUI byte stream past
 /// the 1024-byte kernel pty queue. The pty remains the controlling
 /// terminal: input, signals, winsize, termios and every write outside
-/// flush_buf stay on the real tty. The handshake is sent once here;
+/// flush_buf stay on the real tty. The kitty-lane handshake is sent once
+/// here (the tmux pane lane is handshake-free since M2b);
 /// output is not routed until a real editor mode has been entered (see
 /// tui_mode_change), and any error permanently reverts to the tty.
 static void tui_oob_init(TUIData *tui)
@@ -2615,8 +2616,10 @@ static void tui_oob_init(TUIData *tui)
   // unlike an inherited kitty fd, which may belong to a different kitty
   // window when a multiplexer sits in between. Prefer the pane offer;
   // keep the original refusal for the kitty variable under TMUX/STY.
+  bool from_tmux = true;
   const char *fdstr = os_getenv("TMUX_TUI_OOB_FD");
   if (fdstr == NULL) {
+    from_tmux = false;
     fdstr = os_getenv("KITTY_TUI_OOB_FD");
     if (fdstr == NULL) {
       return;
@@ -2641,18 +2644,23 @@ static void tui_oob_init(TUIData *tui)
     // channel backpressure must block like a slow tty, not spin
     fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
   }
-  static const char handshake[10] = { 'K', 'O', 'O', 'B', '1', '\n', 0, 0, 0, 0 };
-  size_t off = 0;
-  while (off < sizeof(handshake)) {
-    const ssize_t n = write(fd, handshake + off, sizeof(handshake) - off);
-    if (n > 0) {
-      off += (size_t)n;
-      continue;
+  // M2b: the tmux pane lane is handshake-free -- the server trusts its own
+  // socketpair and parses from byte 0. Only the direct kitty lane still
+  // requires the magic (kitty/oob-channel.c).
+  if (!from_tmux) {
+    static const char handshake[10] = { 'K', 'O', 'O', 'B', '1', '\n', 0, 0, 0, 0 };
+    size_t off = 0;
+    while (off < sizeof(handshake)) {
+      const ssize_t n = write(fd, handshake + off, sizeof(handshake) - off);
+      if (n > 0) {
+        off += (size_t)n;
+        continue;
+      }
+      if (n < 0 && errno == EINTR) {
+        continue;
+      }
+      return;  // handshake failed: leave the channel unused (fail-open)
     }
-    if (n < 0 && errno == EINTR) {
-      continue;
-    }
-    return;  // handshake failed: leave the channel unused (fail-open)
   }
   tui->oob_fd = fd;
   // R3T M2 hygiene: children (e.g. :terminal jobs) must inherit neither
