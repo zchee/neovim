@@ -357,6 +357,14 @@ int main(int argc, char **argv)
   assert(!ui_client_channel_id && !use_builtin_ui);
   // Nvim server...
 
+  // A TUI OOB channel offer (kitty's or a multiplexer's) is addressed to the
+  // process that renders the grid: the UI client. This server process only
+  // spawns jobs whose descriptors libuv rewires, so an inherited offer would
+  // point grandchildren at a dead or unrelated fd. Consume it here, the way
+  // tmux's server scrubs the offer it inherited from its own pane.
+  os_unsetenv("TMUX_TUI_OOB_FD");
+  os_unsetenv("KITTY_TUI_OOB_FD");
+
   if (!server_init(params.listen_addr)) {
 #ifdef MSWIN
     // Restore the original stderr (pipe to TUI client) so print_mainerr()
