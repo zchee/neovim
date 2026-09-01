@@ -141,6 +141,21 @@ option(ENABLE_WASMTIME "enable wasmtime" OFF)
 # so it is opt-in and the `unittest` target refuses to run without it.
 option(ENABLE_UNIT_TESTS "build nvim with unit-test hooks (UNIT_TESTING)" OFF)
 
+# Escape hatch for the macOS export list (src/nvim/exported_symbols.txt): turn
+# this on to go back to dumping every symbol into the export table. Elsewhere
+# the nvim_bin ENABLE_EXPORTS target property already does that unconditionally
+# and this option changes nothing.
+option(ENABLE_EXPORTS "export every symbol from the nvim binary" OFF)
+
+# Those unit tests reach into nvim through LuaJIT's FFI, which can only find
+# what the binary exports, so they need the whole surface and not the curated
+# list. Tie the two together here rather than making anyone remember a second
+# flag when they reconfigure for unit tests.
+if(ENABLE_UNIT_TESTS AND NOT ENABLE_EXPORTS)
+  message(STATUS "ENABLE_UNIT_TESTS=ON: forcing ENABLE_EXPORTS=ON (unit tests FFI into nvim)")
+  set(ENABLE_EXPORTS ON)
+endif()
+
 message(STATUS "CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}")
 
 set_default_buildtype(Debug)
