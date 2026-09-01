@@ -63,6 +63,9 @@ enum {
   /// In the NFA engine: how many states are allowed.
   NFA_MAX_STATES = 100000,
   NFA_TOO_EXPENSIVE = -1,
+  /// In the NFA engine: highest list id handed out before the marks in
+  /// nfa_state_T.lastlist[] are recycled.  See nfa_regexec_both().
+  NFA_MAX_LISTID = INT_MAX / 2,
 };
 
 /// Which regexp engine to use? Needed for vim_regcomp().
@@ -139,6 +142,10 @@ typedef struct {
   char *pattern;
   int nsubexp;          ///< number of ()
   int nstate;
+  /// High-water mark of the list ids stored in state[].lastlist[].  Ids keep climbing
+  /// across match attempts so a stale mark can never be mistaken for a live one, which
+  /// is what lets nfa_regexec_both() skip clearing lastlist[] for every state.
+  int listid;
   void *listbuf[2];     ///< cached list buffers for nfa_regmatch()
   nfa_state_T state[];
 } nfa_regprog_T;
@@ -1284,9 +1291,12 @@ typedef struct {
                         ///< (subexpr 0) is used.
   // listid is global, so that it increases on recursive calls to
   // nfa_regmatch(), which means we don't have to clear the lastlist field of
-  // all the states.
+  // all the states.  It also keeps climbing across match attempts on the same
+  // program; nfa_listid_base is its value when the current attempt started, so
+  // that the NFA_MAX_STATES bail-out stays a per-attempt budget.
   int nfa_listid;
   int nfa_alt_listid;
+  int nfa_listid_base;
 
   int nfa_has_zsubexpr;  ///< NFA regexp has \z( ), set zsubexpr.
 } regexec_T;
@@ -13900,7 +13910,9 @@ static int recursive_regmatch(nfa_state_T *state, nfa_pim_T *pim, nfa_regprog_T 
     nfa_restore_listids(prog, *listids);
   } else {
     nfa_ll_index--;
-    rex.nfa_alt_listid = rex.nfa_listid;
+    // High-water mark of the recursive list: the largest id stored in lastlist[1] is the
+    // nextlist's, which is one past rex.nfa_listid.
+    rex.nfa_alt_listid = rex.nfa_listid + 1;
   }
 
   // restore position in input text
@@ -14293,7 +14305,7 @@ static int nfa_regmatch(nfa_regprog_T *prog, nfa_state_T *start, regsubs_T *subm
     nextlist->has_pim = false;
     rex.nfa_listid++;
     if (prog->re_engine == AUTOMATIC_ENGINE
-        && (rex.nfa_listid >= NFA_MAX_STATES)) {
+        && (rex.nfa_listid - rex.nfa_listid_base >= NFA_MAX_STATES)) {
       // Too many states, retry with old engine.
       nfa_match = NFA_TOO_EXPENSIVE;
       goto theend;
@@ -15660,8 +15672,14 @@ static int nfa_regtry(nfa_regprog_T *prog, colnr_T col, proftime_T *tm, int *tim
 
   clear_sub(&subs.norm);
   clear_sub(&m.norm);
-  clear_sub(&subs.synt);
-  clear_sub(&m.synt);
+  if (rex.nfa_has_zsubexpr) {
+    clear_sub(&subs.synt);
+    clear_sub(&m.synt);
+  } else {
+    // Without \z(...\) nothing ever reads these lists; just keep them defined.
+    subs.synt.in_use = 0;
+    m.synt.in_use = 0;
+  }
 
   int result = nfa_regmatch(prog, start, &subs, &m);
   if (!result) {
@@ -15794,8 +15812,20 @@ static int nfa_regexec_both(uint8_t *line, colnr_T startcol, proftime_T *tm, int
   rex.nfa_has_zend = prog->has_zend;
   rex.nfa_has_backref = prog->has_backref;
   rex.nfa_nsubexpr = prog->nsubexp;
-  rex.nfa_listid = 1;
-  rex.nfa_alt_listid = 2;
+  // Continue the list ids where the previous attempt on this program left off, so every id
+  // used below is larger than every mark still sitting in state[].lastlist[].  That is what
+  // makes clearing those marks unnecessary.  Both lastlist slots share one counter.
+  if (prog->listid > NFA_MAX_LISTID) {
+    // About to overflow: recycle the ids and clear the marks that would now alias them.
+    for (int i = 0; i < prog->nstate; i++) {
+      prog->state[i].lastlist[0] = 0;
+      prog->state[i].lastlist[1] = 0;
+    }
+    prog->listid = 0;
+  }
+  rex.nfa_listid = prog->listid;
+  rex.nfa_alt_listid = prog->listid;
+  rex.nfa_listid_base = prog->listid;
 #ifdef REGEXP_DEBUG
   nfa_regengine.expr = prog->pattern;
 #endif
@@ -15842,13 +15872,20 @@ static int nfa_regexec_both(uint8_t *line, colnr_T startcol, proftime_T *tm, int
   // Set the "nstate" used by nfa_regcomp() to zero to trigger an error when
   // it's accidentally used during execution.
   nstate = 0;
+#ifdef REGEXP_DEBUG
+  // nfa_print_state() marks the states it visited by negating their id; undo that so the next
+  // dump is complete again.  The ids themselves are handed out once, by alloc_state().
   for (int i = 0; i < prog->nstate; i++) {
-    prog->state[i].id = i;
-    prog->state[i].lastlist[0] = 0;
-    prog->state[i].lastlist[1] = 0;
+    prog->state[i].id = abs(prog->state[i].id);
   }
+#endif
 
   retval = nfa_regtry(prog, col, tm, timed_out);
+
+  // Record how far the ids climbed, so the next attempt starts above every mark left behind.
+  // The largest id ever stored is a list's "id + 1" (the nextlist), for the normal list as
+  // well as for the recursive one.
+  prog->listid = MAX(rex.nfa_listid, rex.nfa_alt_listid) + 1;
 
 #ifdef REGEXP_DEBUG
   nfa_regengine.expr = NULL;
@@ -15933,6 +15970,7 @@ static regprog_T *nfa_regcomp(uint8_t *expr, int re_flags)
   prog = xmalloc(prog_size);
   state_ptr = prog->state;
   prog->re_in_use = false;
+  prog->listid = 0;
   prog->listbuf[0] = NULL;
   prog->listbuf[1] = NULL;
 
