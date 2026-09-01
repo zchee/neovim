@@ -2639,6 +2639,15 @@ static void tui_oob_init(TUIData *tui)
   const int on = 1;
   setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 #endif
+  // The lane is a blocking socketpair, so the send buffer is the only slack
+  // between a burst of rendered frames and the reader's scheduling latency.
+  // Ask for a generous one and halve down until the kernel accepts; every
+  // failure is ignored, the default buffer is still correct (fail-open).
+  for (int sndbuf = 1 << 20; sndbuf >= 1 << 16; sndbuf >>= 1) {
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf)) == 0) {
+      break;
+    }
+  }
   const int flags = fcntl(fd, F_GETFL);
   if (flags >= 0 && (flags & O_NONBLOCK)) {
     // channel backpressure must block like a slow tty, not spin
