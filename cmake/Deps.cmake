@@ -5,6 +5,12 @@ set(DEPS_LIB_DIR "${DEPS_INSTALL_DIR}/lib")
 set(DEPS_BUILD_DIR "${CMAKE_BINARY_DIR}/build")
 set(DEPS_DOWNLOAD_DIR "${DEPS_BUILD_DIR}/downloads")
 
+# The bundled deps are static archives consumed by a single LTO'd binary, so
+# building them as bitcode lets the nvim link inline and specialize across the
+# dep boundary instead of stopping at it. A dep whose own CMake policy scope
+# predates CMP0069 silently ignores this; a dep that cannot cope with it can
+# opt out by appending CMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF to its own
+# CMAKE_ARGS, which wins over this default.
 set(DEPS_CMAKE_ARGS
   -D CMAKE_C_COMPILER=${CMAKE_C_COMPILER}
   -D CMAKE_C_STANDARD=99
@@ -12,6 +18,7 @@ set(DEPS_CMAKE_ARGS
   -D CMAKE_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM}
   -D BUILD_SHARED_LIBS=OFF
   -D CMAKE_POSITION_INDEPENDENT_CODE=ON
+  -D CMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
   -D CMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR})
 if(APPLE)
   list(APPEND DEPS_CMAKE_ARGS -D CMAKE_FIND_FRAMEWORK=${CMAKE_FIND_FRAMEWORK})
