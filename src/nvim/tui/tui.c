@@ -89,6 +89,15 @@ struct TUIData {
   TermInput input;
   uv_loop_t write_loop;
   TerminfoEntry ti;
+  /// Capabilities that take no parameters, pre-measured by terminfo_start:
+  /// they render to themselves, so emitting one is a memcpy of `len` bytes
+  /// rather than a walk through the terminfo interpreter. `str` is the
+  /// capability the length was measured from, so a capability re-pointed
+  /// after the cache was built misses it instead of going stale.
+  struct {
+    const char *str;
+    uint16_t len;
+  } ti_cached[kTermCount];
   char *term;  ///< value of $TERM
   union {
     uv_tty_t tty;
@@ -484,6 +493,56 @@ static void apply_termdefs(TUIData *tui)
 #undef PUSH_ERR
 }
 
+/// Measures the capabilities that render to themselves.
+///
+/// terminfo_fmt copies every byte that is not part of a `%` directive
+/// straight through, so a capability containing no `%` at all renders to its
+/// own bytes: the pre-rendered form is the string, and only its length has to
+/// be worked out, once. Capabilities that reach TERMINFO_SEQ_LIMIT are left
+/// out so that a cached emit can never write more than the interpreter would
+/// have been allowed to (see terminfo_put_cached).
+static void terminfo_cache_zero_param(TUIData *tui)
+  FUNC_ATTR_NONNULL_ALL
+{
+  for (size_t i = 0; i < kTermCount; i++) {
+    tui->ti_cached[i].str = NULL;
+    tui->ti_cached[i].len = 0;
+    const char *str = tui->ti.defs[i];
+    if (str == NULL || strchr(str, '%') != NULL) {
+      continue;
+    }
+    const size_t len = strlen(str);
+    if (len > 0 && len < TERMINFO_SEQ_LIMIT) {
+      tui->ti_cached[i].str = str;
+      tui->ti_cached[i].len = (uint16_t)len;
+    }
+  }
+}
+
+/// Emits a capability from the pre-rendered cache.
+///
+/// Declines unless the cached length was measured from the capability that is
+/// installed right now, so a capability replaced after terminfo_start (the
+/// DECRQSS undercurl reply does this, via tui_enable_extended_underline) falls
+/// back to the interpreter rather than reading a stale length.
+///
+/// Mirrors terminfo_fmt's capacity rule -- it insists on room for a
+/// terminator it never writes -- so a cached capability lands in the same
+/// place, and declines at the same moment, as the interpreted one it replaces.
+///
+/// @return bytes written, or 0 when the capability is not cached or does not fit.
+static size_t terminfo_put_cached(TUIData *tui, TerminfoDef what, char *buf, const char *buf_end)
+  FUNC_ATTR_NONNULL_ALL
+{
+  const size_t len = tui->ti_cached[what].len;
+  if (len == 0 || tui->ti_cached[what].str != tui->ti.defs[what]
+      || (size_t)(buf_end - buf) < len + 1) {
+    return 0;
+  }
+  memcpy(buf, tui->ti_cached[what].str, len);
+  return len;
+}
+
 /// Enable the alternate screen and emit other control sequences to start the TUI.
 ///
 /// This is also called when the TUI is resumed after being suspended. We reinitialize all state
@@ -577,6 +636,10 @@ static void terminfo_start(TUIData *tui)
   patch_terminfo_bugs(tui, term, colorterm, vtev, konsolev, iterm_env, nsterm);
   augment_terminfo(tui, term, vtev, konsolev, weztermv, iterm_env, nsterm);
   apply_termdefs(tui);
+  // Last point at which the capability table is still untouched by output:
+  // everything below starts emitting. Rebuilding here is also what makes the
+  // cache correct across a resume, since this whole function reruns then.
+  terminfo_cache_zero_param(tui);
 
 #define TI_HAS(name) (tui->ti.defs[name] != NULL)
   tui->can_change_scroll_region = TI_HAS(kTerm_change_scroll_region);
@@ -2137,11 +2200,15 @@ static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params)
     return;
   }
 
+  char *const buf_end = tui->buf + sizeof(tui->buf);
+
   if (sizeof(tui->buf) - tui->bufpos > TERMINFO_SEQ_LIMIT) {
-    TPVAR copy_params[9];
-    memcpy(copy_params, params, sizeof copy_params);
-    size_t len = terminfo_fmt(tui->buf + tui->bufpos, tui->buf + sizeof(tui->buf), str,
-                              copy_params);
+    size_t len = terminfo_put_cached(tui, what, tui->buf + tui->bufpos, buf_end);
+    if (len == 0) {
+      TPVAR copy_params[9];
+      memcpy(copy_params, params, sizeof copy_params);
+      len = terminfo_fmt(tui->buf + tui->bufpos, buf_end, str, copy_params);
+    }
     if (len > 0) {
       tui->bufpos += len;
       return;
@@ -2150,7 +2217,10 @@ static void terminfo_print(TUIData *tui, TerminfoDef what, TPVAR *params)
 
   // try again with fresh buffer
   flush_buf(tui, kFlushBufPartial);
-  size_t len = terminfo_fmt(tui->buf + tui->bufpos, tui->buf + sizeof(tui->buf), str, params);
+  size_t len = terminfo_put_cached(tui, what, tui->buf + tui->bufpos, buf_end);
+  if (len == 0) {
+    len = terminfo_fmt(tui->buf + tui->bufpos, buf_end, str, params);
+  }
   if (len > 0) {
     tui->bufpos += len;
   }
@@ -2787,11 +2857,12 @@ static void flush_buf(TUIData *tui, FlushBufFinish finish)
     // Otherwise, hide the cursor to avoid cursor jumping.
     tui->is_invisible = true;
 
-    // TODO(bfredl): zero-param terminfo strings should be pre-filtered so we can just
-    // return a cached string here
     const char *str = tui->ti.defs[kTerm_cursor_invisible];
     if (str != NULL) {
-      pre_len += terminfo_fmt(pre + pre_len, pre + sizeof(pre), str, null_params);
+      size_t len = terminfo_put_cached(tui, kTerm_cursor_invisible, pre + pre_len,
+                                       pre + sizeof(pre));
+      pre_len += len > 0 ? len
+                         : terminfo_fmt(pre + pre_len, pre + sizeof(pre), str, null_params);
     }
   }
 
@@ -2806,16 +2877,19 @@ static void flush_buf(TUIData *tui, FlushBufFinish finish)
   // Once synchronized output has ended, or when it was not active, make the cursor
   // visible or invisible according to the current TUI state.
   if (!tui->sync_output_active) {
-    const char *str = NULL;
+    TerminfoDef what = kTermCount;
     if (tui->is_invisible && !should_be_invisible) {
-      str = tui->ti.defs[kTerm_cursor_normal];
+      what = kTerm_cursor_normal;
       tui->is_invisible = false;
     } else if (!tui->is_invisible && should_be_invisible) {
-      str = tui->ti.defs[kTerm_cursor_invisible];
+      what = kTerm_cursor_invisible;
       tui->is_invisible = true;
     }
+    const char *str = what < kTermCount ? tui->ti.defs[what] : NULL;
     if (str != NULL) {
-      post_len += terminfo_fmt(post + post_len, post + sizeof(post), str, null_params);
+      size_t len = terminfo_put_cached(tui, what, post + post_len, post + sizeof(post));
+      post_len += len > 0 ? len
+                          : terminfo_fmt(post + post_len, post + sizeof(post), str, null_params);
     }
   }
 
