@@ -135,6 +135,12 @@ option(ENABLE_LIBINTL "enable libintl" ON)
 option(ENABLE_UNIBILIUM "enable unibilium" ON)
 option(ENABLE_WASMTIME "enable wasmtime" OFF)
 
+# Unit tests FFI into the nvim binary itself, so they require nvim to be built
+# with UNIT_TESTING: test fixtures linked in and internal allocator hooks
+# exported. That is a test-only ABI which must never ship in a release binary,
+# so it is opt-in and the `unittest` target refuses to run without it.
+option(ENABLE_UNIT_TESTS "build nvim with unit-test hooks (UNIT_TESTING)" OFF)
+
 message(STATUS "CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}")
 
 set_default_buildtype(Debug)
