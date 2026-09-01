@@ -204,8 +204,11 @@ jobs:
       - name: Build
         env:
           BUILD_FLAGS: ${{ matrix.build.flags }}
+          # Unit tests FFI into the nvim binary, so only that job asks for the
+          # test-only UNIT_TESTING hooks; every other build stays release-shaped.
+          UNIT_TEST_FLAGS: ${{ matrix.test == 'unittest' && '-D ENABLE_UNIT_TESTS=ON' || '' }}
         run: |
-          cmake --preset ci -D CMAKE_BUILD_TYPE=Debug -D CMAKE_INSTALL_PREFIX:PATH=$INSTALL_PREFIX $BUILD_FLAGS
+          cmake --preset ci -D CMAKE_BUILD_TYPE=Debug -D CMAKE_INSTALL_PREFIX:PATH=$INSTALL_PREFIX $BUILD_FLAGS $UNIT_TEST_FLAGS
           cmake --build build
 
       - if: ${{ matrix.test == 'unittest' }}

@@ -12,13 +12,31 @@ set(TEST_OPTIONS
 
 check_lua_module(${LUA_PRG} "ffi" LUA_HAS_FFI)
 if(LUA_HAS_FFI)
-  add_custom_target(unittest
-    COMMAND ${CMAKE_COMMAND}
-      -D TEST_TYPE=unit
-      ${TEST_OPTIONS}
-      -P ${PROJECT_SOURCE_DIR}/cmake/RunTests.cmake
-    USES_TERMINAL)
-  add_dependencies(unittest nvim)
+  if(ENABLE_UNIT_TESTS)
+    add_custom_target(unittest
+      COMMAND ${CMAKE_COMMAND}
+        -D TEST_TYPE=unit
+        ${TEST_OPTIONS}
+        -P ${PROJECT_SOURCE_DIR}/cmake/RunTests.cmake
+      USES_TERMINAL)
+    add_dependencies(unittest nvim)
+  else()
+    # The unit tests FFI into the nvim binary, which only exports the fixtures
+    # and allocator hooks they need when built with ENABLE_UNIT_TESTS. Running
+    # them against a binary built without it fails deep inside the FFI with an
+    # unrelated-looking error, so refuse up front and say how to fix it.
+    add_custom_target(unittest
+      COMMAND ${CMAKE_COMMAND} -E echo ""
+      COMMAND ${CMAKE_COMMAND} -E echo "ERROR: unit tests need nvim built with ENABLE_UNIT_TESTS=ON."
+      COMMAND ${CMAKE_COMMAND} -E echo "       This build dir has ENABLE_UNIT_TESTS=OFF, so nvim has no"
+      COMMAND ${CMAKE_COMMAND} -E echo "       UNIT_TESTING fixtures or allocator hooks to FFI into."
+      COMMAND ${CMAKE_COMMAND} -E echo ""
+      COMMAND ${CMAKE_COMMAND} -E echo "  Reconfigure with:"
+      COMMAND ${CMAKE_COMMAND} -E echo "    cmake -B ${CMAKE_BINARY_DIR} -D ENABLE_UNIT_TESTS=ON"
+      COMMAND ${CMAKE_COMMAND} -E echo ""
+      COMMAND ${CMAKE_COMMAND} -E false
+      USES_TERMINAL)
+  endif()
 else()
   message(WARNING "disabling unit tests: no Luajit FFI in ${LUA_PRG}")
 endif()
