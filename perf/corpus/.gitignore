@@ -1,0 +1,3 @@
+# Generated corpora: reproducible from gen_corpus.lua, too large to commit.
+*.c
+*.txt
