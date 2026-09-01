@@ -38,6 +38,22 @@ static bool hlstate_active = false;
 
 static Set(HlEntry) attr_entries = SET_INIT;
 static Map(uint64_t, int) combine_attr_entries = MAP_INIT;
+
+/// Direct-mapped memo in front of "combine_attr_entries".
+///
+/// hl_combine_attr() is called for nearly every cell of every redraw, and the
+/// same handful of (char_attr, prim_attr) pairs repeat over and over, so the
+/// hash map probe dominates. A single indexed load answers the repeats.
+/// Entries are only ever written where the map itself is written, so the memo
+/// can never outlive the map entry it mirrors.
+///
+/// Tag 0 means "empty": hl_combine_attr() returns before the probe when either
+/// attr is 0, so a live tag is never 0.
+enum { COMBINE_MEMO_SIZE = 256, };
+static struct {
+  uint64_t tag;
+  int id;
+} combine_attr_memo[COMBINE_MEMO_SIZE];
 static Map(uint64_t, int) blend_attr_entries = MAP_INIT;
 static Map(uint64_t, int) blendthrough_attr_entries = MAP_INIT;
 static Set(cstr_t) urls = SET_INIT;
@@ -578,6 +594,8 @@ int hl_get_term_attr(HlAttrs *aep)
 /// Clear all highlight tables.
 void clear_hl_tables(bool reinit)
 {
+  memset(combine_attr_memo, 0, sizeof(combine_attr_memo));
+
   const char *url = NULL;
   set_foreach(&urls, url, {
     xfree((void *)url);
@@ -642,6 +660,11 @@ int hl_combine_attr(int char_attr, int prim_attr)
   }
 
   uint64_t combine_tag = HlAttrKey(char_attr, prim_attr);
+  size_t memo_idx = (size_t)((combine_tag * UINT64_C(0x9e3779b97f4a7c15)) >> 56);
+  if (combine_attr_memo[memo_idx].tag == combine_tag) {
+    return combine_attr_memo[memo_idx].id;
+  }
+
   int id = map_get(uint64_t, int)(&combine_attr_entries, combine_tag);
   if (id > 0) {
     return id;
@@ -708,6 +731,8 @@ int hl_combine_attr(int char_attr, int prim_attr)
                                  .id1 = char_attr, .id2 = prim_attr });
   if (id > 0) {
     map_put(uint64_t, int)(&combine_attr_entries, combine_tag, id);
+    combine_attr_memo[memo_idx].tag = combine_tag;
+    combine_attr_memo[memo_idx].id = id;
   }
 
   return id;

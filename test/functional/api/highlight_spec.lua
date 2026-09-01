@@ -5,6 +5,7 @@ local describe, it, before_each = t.describe, t.it, t.before_each
 local clear, eq, neq = n.clear, t.eq, t.neq
 local command = n.command
 local exec_capture = n.exec_capture
+local exec_lua = n.exec_lua
 local api = n.api
 local fn = n.fn
 local pcall_err = t.pcall_err
@@ -387,6 +388,40 @@ describe('API: set highlight', function()
     local cell = api.nvim__inspect_cell(1, 0, 0)[2]
     eq(16711935, cell.foreground)
     eq('Monaco', cell.font)
+  end)
+
+  it('combined attrs are recomputed after the attr tables are reset', function()
+    local ns = api.nvim_create_namespace('test_combine_reset')
+    -- Turn ext_hlstate on up front, so that the resets below all rebuild the
+    -- attr table the same way, handing the same ids back out to the two groups.
+    api.nvim__inspect_cell(1, 0, 0)
+    api.nvim_set_hl(0, 'CombineFg', { fg = '#123456' })
+    api.nvim_set_hl(0, 'CombineBg', { bg = '#654321' })
+    api.nvim_buf_set_lines(0, 0, -1, false, { 'x' })
+    api.nvim_buf_set_extmark(0, ns, 0, 0, { end_col = 1, hl_group = 'CombineFg', priority = 100 })
+    api.nvim_buf_set_extmark(0, ns, 0, 0, { end_col = 1, hl_group = 'CombineBg', priority = 200 })
+
+    --- Fills the attr table until it runs out of ids, which resets every table.
+    local function overflow_attr_table()
+      exec_lua(function()
+        for i = 1, 70000 do
+          vim.api.nvim_set_hl(0, 'Churn', { fg = i })
+        end
+      end)
+    end
+
+    local combined = { fg = 0x123456, bg = 0x654321 }
+    overflow_attr_table()
+    command('redraw')
+    local before = api.nvim__inspect_cell(1, 0, 0)[2]
+    eq(combined, { fg = before.foreground, bg = before.background })
+
+    -- The second reset hands the two groups the same ids again, so a
+    -- combination cached across it would name one of the entries above instead.
+    overflow_attr_table()
+    command('redraw')
+    local after = api.nvim__inspect_cell(1, 0, 0)[2]
+    eq(combined, { fg = after.foreground, bg = after.background })
   end)
 end)
 
