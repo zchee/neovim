@@ -864,6 +864,14 @@ bool utf_iscomposing(int c1, int c2, GraphemeState *state)
 schar_T utfc_ptr2schar(const char *p, int *firstc)
   FUNC_ATTR_NONNULL_ALL
 {
+  uint8_t b0 = (uint8_t)(*p);
+  // Be quick for ASCII. A composing char is never ASCII, so the next byte
+  // rules one out. Reading it is safe: "p" is NUL terminated and b0 is not it.
+  if (b0 < 0x80 && b0 != NUL && (uint8_t)p[1] < 0x80) {
+    *firstc = b0;
+    return schar_from_ascii(b0);
+  }
+
   int c = utf_ptr2char(p);
   *firstc = c;  // NOT optional, you are gonna need it
   bool first_compose = utf_iscomposing_first(c);
@@ -883,9 +891,16 @@ schar_T utfc_ptr2schar(const char *p, int *firstc)
 schar_T utfc_ptrlen2schar(const char *p, int len, int *firstc)
   FUNC_ATTR_NONNULL_ALL
 {
-  if ((len == 1 && (uint8_t)(*p) >= 0x80) || len == 0) {
+  uint8_t b0 = (uint8_t)(*p);
+  // Be quick for ASCII. "len" already accounts for composing chars.
+  if (len == 1 && b0 < 0x80 && b0 != NUL) {
+    *firstc = b0;
+    return schar_from_ascii(b0);
+  }
+
+  if ((len == 1 && b0 >= 0x80) || len == 0) {
     // invalid or truncated sequence
-    *firstc = (uint8_t)(*p);
+    *firstc = b0;
     return 0;
   }
 

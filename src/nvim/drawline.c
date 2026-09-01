@@ -260,7 +260,7 @@ static int line_putchar(buf_T *buf, const char **pp, schar_T *dest, int maxcells
     }
   } else {
     int u8c;
-    dest[0] = utfc_ptr2schar(p, &u8c);
+    dest[0] = utfc_ptrlen2schar(p, c_len, &u8c);
     if (cells > 1) {
       dest[1] = 0;
     }
@@ -2214,7 +2214,7 @@ int win_line(win_T *wp, linenr_T lnum, int startrow, int endrow, int col_rows, b
 
       // Get a character from the line itself.
       mb_l = utfc_ptr2len(ptr);
-      mb_schar = utfc_ptr2schar(ptr, &mb_c);
+      mb_schar = utfc_ptrlen2schar(ptr, mb_l, &mb_c);
 
       // Overlong encoded ASCII or ASCII with composing char
       // is displayed normally, except a NUL.
