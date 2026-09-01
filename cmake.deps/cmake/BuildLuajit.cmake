@@ -27,9 +27,23 @@ if(CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
 else()
   set(AMD64_ABI "")
 endif()
+# LuaJIT is driven by its own Makefile, so it never sees DEPS_CMAKE_ARGS and
+# has to be told about ThinLTO directly. The VM core is hand-written assembly
+# and stays a native object either way; this only turns the surrounding C into
+# bitcode so the nvim link can optimize across it.
+set(LUAJIT_LTO "CFLAGS+=-flto=thin")
+if(APPLE)
+  # LuaJIT already passes -Wl,-E on Linux, but on Darwin it relies on ld64
+  # exporting an executable's globals by default -- which LTO undoes, because
+  # it may internalize any global the link itself never references. The host
+  # luajit must keep exporting the whole Lua C API: build-time modules such as
+  # nlua0 are dlopened into it and resolve those symbols in the flat namespace.
+  list(APPEND LUAJIT_LTO "TARGET_LDFLAGS+=-Wl,-export_dynamic")
+endif()
 set(BUILDCMD_UNIX ${MAKE_PRG} -j CFLAGS=-fPIC
                               CFLAGS+=-funwind-tables
                               CFLAGS+=-Wreturn-mismatch
+                              ${LUAJIT_LTO}
                               ${NO_STACK_CHECK}
                               ${AMD64_ABI}
                               CCDEBUG+=-g
