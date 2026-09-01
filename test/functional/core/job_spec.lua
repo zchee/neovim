@@ -37,6 +37,22 @@ local matches = t.matches
 local skip = t.skip
 local is_os = t.is_os
 
+-- Reaching into nvim's internals through ffi.C only works while the binary
+-- exports them. On macOS it ships an explicit export list instead
+-- (src/nvim/exported_symbols.txt) unless configured with ENABLE_EXPORTS=ON, so
+-- probe before depending on them. One internal answers for all of them: they
+-- are either all exported or none are.
+local probe_ffi_internals = [[
+  local ok, ffi = pcall(require, 'ffi')
+  if not ok then
+    return false
+  end
+  ffi.cdef('void block_autocmds(void);')
+  return pcall(function()
+    return ffi.C.block_autocmds
+  end)
+]]
+
 describe('jobs', function()
   local channel
 
@@ -769,8 +785,8 @@ describe('jobs', function()
   end)
 
   it('lists passed to callbacks are freed if not stored #25891', function()
-    if not exec_lua('return pcall(require, "ffi")') then
-      pending('N/A: missing LuaJIT FFI')
+    if not exec_lua(probe_ffi_internals) then
+      pending('N/A: missing LuaJIT FFI, or nvim internals not exported')
     end
 
     source([[

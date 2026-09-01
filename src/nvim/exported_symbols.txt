@@ -1,0 +1,207 @@
+# Symbols the nvim executable exports to code that is dlopened into it.
+#
+# Passed to ld64 as -exported_symbols_list; everything not named here becomes
+# a private extern, which both shrinks the export table and lets LTO specialize
+# and discard far more of the binary. Note that ld64 treats every entry as an
+# initial undefine, so a name listed here that no longer exists is a link
+# error, not a warning -- that is deliberate, it means an API that disappears
+# out from under us fails loudly instead of shipping broken. Wildcards are the
+# exception: a pattern that matches nothing is silently ignored, so they are
+# used only where the exact spelling is expected to drift.
+#
+# What has to be here and why:
+#   - the Lua 5.1 C API, which Lua C modules loaded through package.cpath
+#     resolve against the host process (see neovim/neovim#25295)
+#   - LuaJIT's own extensions to it, for modules built against LuaJIT
+#   - luv's public C API from luv.h, for modules that integrate with the
+#     event loop nvim already owns
+#   - tree-sitter's allocator hooks, which parsers compiled with
+#     TREE_SITTER_REUSE_ALLOCATOR expect to find in the host
+#
+# Nvim's own internals are deliberately absent: nothing dlopened into nvim is
+# supposed to reach into them, and code that FFI'd into them (LuaJIT ffi.C on
+# an nvim function) will no longer resolve. Build with -D ENABLE_EXPORTS=ON to
+# get the old export-everything binary back.
+#
+# Regenerate the Lua entries from the headers nvim actually built against:
+#   H=.deps/usr/include/luajit-2.1
+#   grep -ohE '\b(lua_|luaL_)[A-Za-z0-9_]+' $H/lua.h $H/lauxlib.h | sort -u \
+#     | comm -12 - <(nm -gU build/bin/nvim | awk '{print $3}' | sed 's/^_//' | sort -u)
+# (the comm drops the macros and typedefs the grep also picks up), then the
+# same for luaopen_* in lualib.h, luaJIT_* in luajit.h, and luv_* in luv.h.
+
+# Lua 5.1 C API (lua.h, lauxlib.h)
+_luaL_addlstring
+_luaL_addstring
+_luaL_addvalue
+_luaL_argerror
+_luaL_buffinit
+_luaL_callmeta
+_luaL_checkany
+_luaL_checkinteger
+_luaL_checklstring
+_luaL_checknumber
+_luaL_checkoption
+_luaL_checkstack
+_luaL_checktype
+_luaL_checkudata
+_luaL_error
+_luaL_execresult
+_luaL_fileresult
+_luaL_findtable
+_luaL_getmetafield
+_luaL_gsub
+_luaL_loadbuffer
+_luaL_loadbufferx
+_luaL_loadfile
+_luaL_loadfilex
+_luaL_loadstring
+_luaL_newmetatable
+_luaL_newstate
+_luaL_openlib
+_luaL_optinteger
+_luaL_optlstring
+_luaL_optnumber
+_luaL_prepbuffer
+_luaL_pushmodule
+_luaL_pushresult
+_luaL_ref
+_luaL_register
+_luaL_setfuncs
+_luaL_setmetatable
+_luaL_testudata
+_luaL_traceback
+_luaL_typerror
+_luaL_unref
+_luaL_where
+_lua_atpanic
+_lua_call
+_lua_checkstack
+_lua_close
+_lua_concat
+_lua_copy
+_lua_cpcall
+_lua_createtable
+_lua_dump
+_lua_equal
+_lua_error
+_lua_gc
+_lua_getallocf
+_lua_getexdata
+_lua_getexdata2
+_lua_getfenv
+_lua_getfield
+_lua_gethook
+_lua_gethookcount
+_lua_gethookmask
+_lua_getinfo
+_lua_getlocal
+_lua_getmetatable
+_lua_getstack
+_lua_gettable
+_lua_gettop
+_lua_getupvalue
+_lua_insert
+_lua_iscfunction
+_lua_isnumber
+_lua_isstring
+_lua_isuserdata
+_lua_isyieldable
+_lua_lessthan
+_lua_load
+_lua_loadx
+_lua_newstate
+_lua_newthread
+_lua_newuserdata
+_lua_next
+_lua_objlen
+_lua_pcall
+_lua_pushboolean
+_lua_pushcclosure
+_lua_pushfstring
+_lua_pushinteger
+_lua_pushlightuserdata
+_lua_pushlstring
+_lua_pushnil
+_lua_pushnumber
+_lua_pushstring
+_lua_pushthread
+_lua_pushvalue
+_lua_pushvfstring
+_lua_rawequal
+_lua_rawget
+_lua_rawgeti
+_lua_rawset
+_lua_rawseti
+_lua_remove
+_lua_replace
+_lua_resetthread
+_lua_resume
+_lua_setallocf
+_lua_setexdata
+_lua_setexdata2
+_lua_setfenv
+_lua_setfield
+_lua_sethook
+_lua_setlocal
+_lua_setmetatable
+_lua_settable
+_lua_settop
+_lua_setupvalue
+_lua_status
+_lua_toboolean
+_lua_tocfunction
+_lua_tointeger
+_lua_tointegerx
+_lua_tolstring
+_lua_tonumber
+_lua_tonumberx
+_lua_topointer
+_lua_tothread
+_lua_touserdata
+_lua_type
+_lua_typename
+_lua_upvalueid
+_lua_upvaluejoin
+_lua_version
+_lua_xmove
+_lua_yield
+
+# LuaJIT standard libraries (lualib.h)
+_luaopen_base
+_luaopen_bit
+_luaopen_debug
+_luaopen_ffi
+_luaopen_io
+_luaopen_jit
+_luaopen_math
+_luaopen_os
+_luaopen_package
+_luaopen_string
+_luaopen_string_buffer
+_luaopen_table
+
+# LuaJIT extensions (luajit.h); the version symbol carries the rolling
+# release number, so it is matched rather than spelled out
+_luaJIT_profile_dumpstack
+_luaJIT_profile_start
+_luaJIT_profile_stop
+_luaJIT_setmode
+_luaJIT_version_*
+
+# luv public C API (luv.h)
+_luaopen_luv
+_luv_cfcpcall
+_luv_cfpcall
+_luv_context
+_luv_loop
+_luv_set_callback
+_luv_set_cthread
+_luv_set_loop
+_luv_set_thread
+_luv_set_thread_cb
+_luv_state
+
+# tree-sitter allocator hooks, for parsers built with
+# TREE_SITTER_REUSE_ALLOCATOR
+_ts_current_*

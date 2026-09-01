@@ -164,9 +164,27 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
   target_link_libraries(nvim_bin PRIVATE "-framework CoreServices")
 
-  # Actually export symbols - symbols may not be visible even though
-  # ENABLE_EXPORTS is set. https://github.com/neovim/neovim/issues/25295
-  target_link_options(nvim_bin PRIVATE "-Wl,-export_dynamic")
+  # Symbols are not visible on macOS even though the ENABLE_EXPORTS target
+  # property is set (https://github.com/neovim/neovim/issues/25295), so what
+  # the binary exports is decided explicitly here.
+  #
+  # Dumping everything into the export table costs more than table space: an
+  # exported symbol is one LTO cannot specialize, inline away or discard,
+  # because it must remain callable by name from outside. Naming the handful
+  # of APIs that dlopened code actually resolves against gives the linker the
+  # rest of the binary to work with.
+  #
+  # The list is spelled for LuaJIT, whose C API is a superset of Lua 5.1's, and
+  # ld64 rejects a list naming symbols the link does not define -- so a
+  # PREFER_LUA build falls back to exporting everything rather than failing.
+  if(ENABLE_EXPORTS OR PREFER_LUA)
+    target_link_options(nvim_bin PRIVATE "-Wl,-export_dynamic")
+  else()
+    target_link_options(nvim_bin PRIVATE
+      "-Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/exported_symbols.txt")
+    set_property(TARGET nvim_bin APPEND PROPERTY
+      LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/exported_symbols.txt)
+  endif()
 elseif(CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
   target_link_libraries(main_lib INTERFACE pthread c++abi)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "SunOS")

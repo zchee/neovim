@@ -38,6 +38,22 @@ local testlog = 'Xtest-tui-log'
 -- that causes delay on exit with ASAN/TSAN.
 local env_notermguicolors = { COLORTERM = 'xterm-256color' }
 
+-- Reaching into nvim's internals through ffi.C only works while the binary
+-- exports them. On macOS it ships an explicit export list instead
+-- (src/nvim/exported_symbols.txt) unless configured with ENABLE_EXPORTS=ON, so
+-- probe before depending on them. One internal answers for all of them: they
+-- are either all exported or none are.
+local probe_ffi_internals = [[
+  local ok, ffi = pcall(require, 'ffi')
+  if not ok then
+    return false
+  end
+  ffi.cdef('void block_autocmds(void);')
+  return pcall(function()
+    return ffi.C.block_autocmds
+  end)
+]]
+
 describe('TUI', function()
   it('exit status 1 and error message with server --listen error #34365', function()
     clear()
@@ -3243,8 +3259,8 @@ describe('TUI', function()
   end)
 
   it('TermResponse from unblock_autocmds() sets "data"', function()
-    if not child_exec_lua('return pcall(require, "ffi")') then
-      pending('N/A: missing LuaJIT FFI')
+    if not child_exec_lua(probe_ffi_internals) then
+      pending('N/A: missing LuaJIT FFI, or nvim internals not exported')
     end
     child_exec_lua([[
       local ffi = require('ffi')
@@ -4445,8 +4461,8 @@ describe('TUI', function()
   it('queries the terminal for OSC 52 support with XTGETTCAP', function()
     t.skip(is_os('win'), 'FIXME: does not work on Windows')
     clear()
-    if not exec_lua('return pcall(require, "ffi")') then
-      pending('N/A: missing LuaJIT FFI')
+    if not exec_lua(probe_ffi_internals) then
+      pending('N/A: missing LuaJIT FFI, or nvim internals not exported')
     end
 
     -- Change vterm's DA1 response so that it doesn't include 52
@@ -5005,8 +5021,8 @@ describe('TUI client', function()
   it('does not crash or hang with a very long title', function()
     local server, _, screen_client = start_headless_server_and_client(true)
     local server_exec_lua = tt.make_lua_executor(server)
-    if not server_exec_lua('return pcall(require, "ffi")') then
-      pending('N/A: missing LuaJIT FFI')
+    if not server_exec_lua(probe_ffi_internals) then
+      pending('N/A: missing LuaJIT FFI, or nvim internals not exported')
     end
 
     server:request('nvim_set_option_value', 'titlestring', '%t%( %M%) - Nvim', {})
@@ -5036,8 +5052,8 @@ describe('TUI client', function()
     t.skip(is_os('win'), 'N/A for Windows')
     local server, _, screen_client = start_headless_server_and_client(true)
     local server_exec_lua = tt.make_lua_executor(server)
-    if not server_exec_lua('return pcall(require, "ffi")') then
-      pending('N/A: missing LuaJIT FFI')
+    if not server_exec_lua(probe_ffi_internals) then
+      pending('N/A: missing LuaJIT FFI, or nvim internals not exported')
     end
 
     -- Use FFI to send a chdir event to a non-directory path.
