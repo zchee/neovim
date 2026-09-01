@@ -4,6 +4,7 @@
 #include <inttypes.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,7 @@
 # include <fcntl.h>
 # include <sys/socket.h>
 # include <sys/stat.h>
+# include <sys/uio.h>
 # include <unistd.h>
 #endif
 
@@ -22,6 +24,7 @@
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/ascii_defs.h"
+#include "nvim/assert_defs.h"
 #include "nvim/charset.h"
 #include "nvim/cursor_shape.h"
 #include "nvim/event/defs.h"
@@ -2681,6 +2684,30 @@ static void tui_oob_init(TUIData *tui)
 #endif
 }
 
+/// Consumes the first `nwritten` bytes of a flush-buffer array.
+///
+/// A gather write reports one byte count spanning every buffer, so the
+/// caller needs that count turned back into "these buffers are done, this
+/// one is half done". Buffers of length zero count as done.
+///
+/// @return how many leading buffers were consumed in full. The first
+/// buffer only partially consumed is rewritten in place to the bytes that
+/// still have to go out; buffers after it are left untouched.
+unsigned tui_bufs_advance(uv_buf_t *bufs, unsigned nbufs, size_t nwritten)
+  FUNC_ATTR_NONNULL_ALL
+{
+  unsigned i = 0;
+  while (i < nbufs && nwritten >= bufs[i].len) {
+    nwritten -= bufs[i].len;
+    i++;
+  }
+  if (i < nbufs && nwritten > 0) {
+    bufs[i].base += nwritten;
+    bufs[i].len = UV_BUF_LEN(bufs[i].len - nwritten);
+  }
+  return i;
+}
+
 /// Writes the flush buffers to the OOB bulk channel when it is armed.
 ///
 /// @return how many leading buffers were fully written. On a write error
@@ -2693,25 +2720,30 @@ static unsigned tui_oob_write(TUIData *tui, uv_buf_t *bufs, unsigned nbufs)
   if (tui->oob_fd < 0 || tui->oob_broken || !tui->oob_ready) {
     return 0;
   }
-  for (unsigned i = 0; i < nbufs; i++) {
-    size_t off = 0;
-    while (off < bufs[i].len) {
-      const ssize_t n = write(tui->oob_fd, bufs[i].base + off, bufs[i].len - off);
-      if (n > 0) {
-        off += (size_t)n;
-        continue;
-      }
-      if (n < 0 && errno == EINTR) {
-        continue;
-      }
-      tui->oob_broken = true;
-      tui->oob_ready = false;
-      ELOG("kitty OOB channel write failed (%s); reverting to the tty",
-           n < 0 ? strerror(errno) : "short write");
-      bufs[i].base += off;
-      bufs[i].len = UV_BUF_LEN(bufs[i].len - off);
-      return i;
+  // A flush is a prologue, the rendered grid and an epilogue. Handing all
+  // three to the kernel at once costs one syscall instead of three, and
+  // lets the socket see one contiguous record rather than three that the
+  // reader may wake up between. libuv defines uv_buf_t to be exactly
+  // struct iovec on POSIX, so the array is passed through as it stands.
+  STATIC_ASSERT(sizeof(uv_buf_t) == sizeof(struct iovec)
+                && offsetof(uv_buf_t, base) == offsetof(struct iovec, iov_base)
+                && offsetof(uv_buf_t, len) == offsetof(struct iovec, iov_len),
+                "uv_buf_t must be layout-compatible with struct iovec");
+  unsigned done = 0;
+  while (done < nbufs) {
+    const ssize_t n = writev(tui->oob_fd, (struct iovec *)(bufs + done), (int)(nbufs - done));
+    if (n > 0) {
+      done += tui_bufs_advance(bufs + done, nbufs - done, (size_t)n);
+      continue;
     }
+    if (n < 0 && errno == EINTR) {
+      continue;
+    }
+    tui->oob_broken = true;
+    tui->oob_ready = false;
+    ELOG("kitty OOB channel write failed (%s); reverting to the tty",
+         n < 0 ? strerror(errno) : "short write");
+    return done;
   }
   return nbufs;
 #else

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <uv.h>  // IWYU pragma: keep
+
 typedef struct TUIData TUIData;
 
 typedef enum {
