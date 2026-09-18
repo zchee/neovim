@@ -27,6 +27,12 @@ endif()
 find_program(CACHE_PRG NAMES ccache sccache)
 mark_as_advanced(CACHE_PRG)
 if(CACHE_PRG)
+  if(NOT EXISTS "${CACHE_PRG}")
+    # find_program() resolves a bare -D CACHE_PRG=<name> against the working
+    # directory rather than PATH, so say so here instead of letting the build
+    # die on a missing file at the first compile.
+    message(FATAL_ERROR "CACHE_PRG is \"${CACHE_PRG}\", which does not exist. Pass a full path, or OFF.")
+  endif()
   set(CMAKE_C_COMPILER_LAUNCHER ${CMAKE_COMMAND} -E env CCACHE_SLOPPINESS=pch_defines,time_macros ${CACHE_PRG})
   list(APPEND DEPS_CMAKE_CACHE_ARGS -DCMAKE_C_COMPILER_LAUNCHER:STRING=${CMAKE_C_COMPILER_LAUNCHER})
 endif()
