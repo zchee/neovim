@@ -33,7 +33,14 @@ if(CACHE_PRG)
     # die on a missing file at the first compile.
     message(FATAL_ERROR "CACHE_PRG is \"${CACHE_PRG}\", which does not exist. Pass a full path, or OFF.")
   endif()
-  set(CMAKE_C_COMPILER_LAUNCHER ${CMAKE_COMMAND} -E env CCACHE_SLOPPINESS=pch_defines,time_macros ${CACHE_PRG})
+  get_filename_component(CACHE_PRG_NAME "${CACHE_PRG}" NAME_WE)
+  if(CACHE_PRG_NAME STREQUAL "ccache")
+    # Only ccache reads CCACHE_SLOPPINESS, so the caches that do not are spared
+    # an extra `cmake -E env` process per translation unit.
+    set(CMAKE_C_COMPILER_LAUNCHER ${CMAKE_COMMAND} -E env CCACHE_SLOPPINESS=pch_defines,time_macros ${CACHE_PRG})
+  else()
+    set(CMAKE_C_COMPILER_LAUNCHER ${CACHE_PRG})
+  endif()
   list(APPEND DEPS_CMAKE_CACHE_ARGS -DCMAKE_C_COMPILER_LAUNCHER:STRING=${CMAKE_C_COMPILER_LAUNCHER})
 endif()
 
