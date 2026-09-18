@@ -49,9 +49,11 @@ Developer guidelines
   make distclean
   make  # Nvim build system uses ninja automatically, if available.
   ```
-- Install `ccache` or `sccache` for faster rebuilds of Nvim. Nvim will use one
-  of these automatically if it's found. To disable caching use:
+- Install `ccache`, `sccache` or `kache` for faster rebuilds of Nvim. Nvim will
+  use the first of these it finds, in that order. To pick another one pass its
+  full path, and to disable caching use `OFF`:
   ```bash
+  cmake -B build -D CACHE_PRG="$(command -v kache)"
   cmake -B build -D CACHE_PRG=OFF
   ```
 

@@ -24,7 +24,9 @@ if(APPLE)
   list(APPEND DEPS_CMAKE_ARGS -D CMAKE_FIND_FRAMEWORK=${CMAKE_FIND_FRAMEWORK})
 endif()
 
-find_program(CACHE_PRG NAMES ccache sccache)
+# Compiler caches, most established first. Set -D CACHE_PRG=/path/to/<cache> to
+# pick a different one, or -D CACHE_PRG=OFF to compile without a cache.
+find_program(CACHE_PRG NAMES ccache sccache kache)
 mark_as_advanced(CACHE_PRG)
 if(CACHE_PRG)
   if(NOT EXISTS "${CACHE_PRG}")

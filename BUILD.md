@@ -20,7 +20,7 @@
 - Third-party dependencies (libuv, LuaJIT, etc.) are downloaded automatically to `.deps/`. See the [FAQ](https://neovim.io/doc/user/faq.html#faq-build) if you have issues.
 - After building, you can run the `nvim` executable without installing it by running `VIMRUNTIME=runtime ./build/bin/nvim`.
 - If you plan to develop Neovim, install [Ninja](https://ninja-build.org/) for faster builds. It will automatically be used.
-- Install [ccache](https://ccache.dev/) for faster rebuilds of Neovim. It's used by default. To disable it, use `CCACHE_DISABLE=true make`.
+- Install [ccache](https://ccache.dev/), [sccache](https://github.com/mozilla/sccache) or [kache](https://github.com/kunobi-ninja/kache) for faster rebuilds of Neovim. The first one found is used automatically, in that order. To pick another one pass its full path, as in `cmake -B build -D CACHE_PRG="$(command -v kache)"`, and use `cmake -B build -D CACHE_PRG=OFF` to build without one.
 
 ## Running tests
 
